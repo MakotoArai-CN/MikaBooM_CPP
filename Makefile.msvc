@@ -1,0 +1,97 @@
+# MikaBooM MSVC NMake Makefile
+
+CC = cl
+RC = rc
+LINK = link
+TARGET = MikaBooM.exe
+SRCDIR = src
+RESDIR = res
+OBJDIR = build
+
+# 获取 2 年后的过期时间（使用 PowerShell）
+!IF [powershell -Command "$$date = Get-Date (Get-Date).AddYears(2) -Format 'yyyy-MM-dd HH:mm:ss'; echo \"EXPIRE_DATE=$$date\"" > expire_date.tmp] == 0
+!INCLUDE expire_date.tmp
+!IF [del expire_date.tmp]
+!ENDIF
+!ENDIF
+
+# 如果没有设置 EXPIRE_DATE，使用默认值
+!IFNDEF EXPIRE_DATE
+EXPIRE_DATE=2027-12-31 23:59:59
+!ENDIF
+
+# 编译标志 - 注入过期时间
+CFLAGS = /c /EHsc /O2 /MT /std:c++11 /DEXPIRE_DATE=\"$(EXPIRE_DATE)\" /Fo$(OBJDIR)\
+
+LFLAGS = /SUBSYSTEM:CONSOLE
+LIBS = kernel32.lib user32.lib shell32.lib advapi32.lib psapi.lib comctl32.lib pdh.lib
+
+SOURCES = \
+    $(SRCDIR)\main.cpp \
+    $(SRCDIR)\core\resource_monitor.cpp \
+    $(SRCDIR)\core\config_manager.cpp \
+    $(SRCDIR)\core\cpu_worker.cpp \
+    $(SRCDIR)\core\memory_worker.cpp \
+    $(SRCDIR)\platform\system_tray.cpp \
+    $(SRCDIR)\platform\autostart.cpp \
+    $(SRCDIR)\utils\console_utils.cpp \
+    $(SRCDIR)\utils\version.cpp
+
+OBJECTS = \
+    $(OBJDIR)\main.obj \
+    $(OBJDIR)\resource_monitor.obj \
+    $(OBJDIR)\config_manager.obj \
+    $(OBJDIR)\cpu_worker.obj \
+    $(OBJDIR)\memory_worker.obj \
+    $(OBJDIR)\system_tray.obj \
+    $(OBJDIR)\autostart.obj \
+    $(OBJDIR)\console_utils.obj \
+    $(OBJDIR)\version.obj \
+    $(OBJDIR)\resource.res
+
+all: directories info $(TARGET)
+
+directories:
+	@if not exist $(OBJDIR) mkdir $(OBJDIR)
+
+# 显示构建信息
+info:
+	@echo ========================================
+	@echo MikaBooM Build Information
+	@echo ========================================
+	@echo Expire Date: $(EXPIRE_DATE)
+	@echo ========================================
+
+$(TARGET): $(OBJECTS)
+	@echo ========================================
+	@echo Linking $(TARGET)...
+	@echo ========================================
+	$(LINK) $(LFLAGS) /OUT:$@ $(OBJECTS) $(LIBS)
+	@echo ========================================
+	@echo Build complete: $(TARGET)
+	@echo Expire Date: $(EXPIRE_DATE)
+	@echo ========================================
+
+{$(SRCDIR)}.cpp{$(OBJDIR)}.obj:
+	$(CC) $(CFLAGS) $<
+
+{$(SRCDIR)\core}.cpp{$(OBJDIR)}.obj:
+	$(CC) $(CFLAGS) $<
+
+{$(SRCDIR)\platform}.cpp{$(OBJDIR)}.obj:
+	$(CC) $(CFLAGS) $<
+
+{$(SRCDIR)\utils}.cpp{$(OBJDIR)}.obj:
+	$(CC) $(CFLAGS) $<
+
+$(OBJDIR)\resource.res: $(RESDIR)\resource.rc
+	$(RC) /fo$@ $**
+
+clean:
+	@if exist $(OBJDIR) rd /s /q $(OBJDIR)
+	@if exist $(TARGET) del $(TARGET)
+	@echo Clean complete.
+
+rebuild: clean all
+
+.PHONY: all clean rebuild directories info
