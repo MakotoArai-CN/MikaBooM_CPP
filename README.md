@@ -105,7 +105,7 @@ Makoto
 
 ## 许可证
 
-MIT License
+本项目遵循[AGPLv3](LICENSE)协议
 
 ## Issues
 
