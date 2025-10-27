@@ -1,5 +1,4 @@
 #pragma once
-
 #include <string>
 #include <map>
 
@@ -8,7 +7,6 @@ private:
     std::string configPath;
     std::map<std::string, std::string> config;
     
-    // 配置项
     int cpuThreshold;
     int memoryThreshold;
     bool autoStart;
@@ -17,7 +15,8 @@ private:
     bool notificationEnabled;
     int notificationCooldown;
     bool enableWorker;
-    
+    bool checkUpdates;  // 新增：是否检查更新
+
 public:
     ConfigManager();
     ~ConfigManager();
@@ -26,7 +25,6 @@ public:
     void Save();
     void SetConfigPath(const std::string& path);
     
-    // Getters
     int GetCPUThreshold() const { return cpuThreshold; }
     int GetMemoryThreshold() const { return memoryThreshold; }
     bool GetAutoStart() const { return autoStart; }
@@ -35,8 +33,8 @@ public:
     bool GetNotificationEnabled() const { return notificationEnabled; }
     int GetNotificationCooldown() const { return notificationCooldown; }
     bool GetEnableWorker() const { return enableWorker; }
+    bool GetCheckUpdates() const { return checkUpdates; }  // 新增
     
-    // Setters
     void SetCPUThreshold(int value) { cpuThreshold = value; }
     void SetMemoryThreshold(int value) { memoryThreshold = value; }
     void SetAutoStart(bool value) { autoStart = value; }
@@ -45,7 +43,8 @@ public:
     void SetNotificationEnabled(bool value) { notificationEnabled = value; }
     void SetNotificationCooldown(int value) { notificationCooldown = value; }
     void SetEnableWorker(bool value) { enableWorker = value; }
-    
+    void SetCheckUpdates(bool value) { checkUpdates = value; }  // 新增
+
 private:
     void SetDefaults();
     std::string GetExePath();

@@ -6,11 +6,14 @@ class CPUWorker {
 private:
     int threshold;
     volatile LONG running;
-    volatile LONG intensity;       // 0-100，表示强度百分比
+    volatile LONG intensity;
     std::vector<HANDLE> workers;
     int numWorkers;
     DWORD lastAdjustTime;
     CRITICAL_SECTION adjustLock;
+    
+    // 动态调整参数
+    int adjustCooldown;  // 调整冷却时间（毫秒）
 
 public:
     CPUWorker(int threshold);
@@ -19,9 +22,10 @@ public:
     void Start();
     void Stop();
     bool IsRunning() const { return running != 0; }
+    
     void AdjustLoad(double currentWorkerUsage, double targetWorkerUsage);
     int GetIntensity() const { return intensity; }
-    double GetUsage() const;  // 估算值，与Go版本一致
+    double GetUsage() const;
 
 private:
     static DWORD WINAPI WorkerThreadProc(LPVOID lpParam);

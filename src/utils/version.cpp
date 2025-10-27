@@ -3,6 +3,12 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <windows.h>
+#include <wininet.h>
+
+#ifdef _MSC_VER
+#pragma comment(lib, "wininet.lib")
+#endif
 
 // UTF-8盲文字符画 - Windows 7及以上使用
 const char* Version::asciiArtsUTF8[] = {
@@ -658,21 +664,18 @@ std::string Version::GetRandomAsciiArt() {
     }
 }
 
+const char* Version::GITHUB_API_URL = "api.github.com";
+
 bool Version::IsValid() {
     std::string expireStr = GetExpireDate();
     time_t now = time(0);
     struct tm expireTm;
     memset(&expireTm, 0, sizeof(expireTm));
     
-    // 支持两种格式：
-    // 1. "2027-12-31 23:59:59" (传统格式)
-    // 2. "2027-12-31T23:59:59" (ISO 8601 格式)
     int year, month, day, hour, min, sec;
     char separator;
-    
-    // 尝试解析（支持空格或T分隔符）
-    int parsed = sscanf(expireStr.c_str(), "%d-%d-%d%c%d:%d:%d", 
-                        &year, &month, &day, &separator, &hour, &min, &sec);
+    int parsed = sscanf(expireStr.c_str(), "%d-%d-%d%c%d:%d:%d",
+                       &year, &month, &day, &separator, &hour, &min, &sec);
     
     if (parsed == 7) {
         expireTm.tm_year = year - 1900;
@@ -682,7 +685,6 @@ bool Version::IsValid() {
         expireTm.tm_min = min;
         expireTm.tm_sec = sec;
     } else {
-        // 解析失败，返回 false
         return false;
     }
     
@@ -696,12 +698,11 @@ int Version::GetDaysUntilExpire() {
     time_t now = time(0);
     struct tm expireTm;
     memset(&expireTm, 0, sizeof(expireTm));
-    std::string expireStr = GetExpireDate();
     
+    std::string expireStr = GetExpireDate();
     int year, month, day, hour, min, sec;
     char separator;
-    
-    sscanf(expireStr.c_str(), "%d-%d-%d%c%d:%d:%d", 
+    sscanf(expireStr.c_str(), "%d-%d-%d%c%d:%d:%d",
            &year, &month, &day, &separator, &hour, &min, &sec);
     
     expireTm.tm_year = year - 1900;
@@ -714,4 +715,98 @@ int Version::GetDaysUntilExpire() {
     time_t expireTime = mktime(&expireTm);
     double seconds = difftime(expireTime, now);
     return (int)(seconds / 86400);
+}
+
+int Version::CompareVersion(const char* v1, const char* v2) {
+    int major1 = 0, minor1 = 0, patch1 = 0;
+    int major2 = 0, minor2 = 0, patch2 = 0;
+    
+    sscanf(v1, "%d.%d.%d", &major1, &minor1, &patch1);
+    sscanf(v2, "%d.%d.%d", &major2, &minor2, &patch2);
+    
+    if (major1 != major2) return major1 - major2;
+    if (minor1 != minor2) return minor1 - minor2;
+    return patch1 - patch2;
+}
+
+bool Version::CheckForUpdates(std::string& latestVersion, std::string& downloadUrl) {
+    HINTERNET hInternet = NULL;
+    HINTERNET hConnect = NULL;
+    HINTERNET hRequest = NULL;
+    bool result = false;
+    
+    // 提前声明所有变量（避免 goto 跳过初始化）
+    char buffer[8192];
+    DWORD bytesRead = 0;
+    std::string response;
+    const char* headers = "User-Agent: MikaBooM/1.0\r\n";
+    const char* path = "/repos/MakotoArai-CN/MikaBooM_CPP/releases/latest";
+    
+    // 初始化 WinINet
+    hInternet = InternetOpenA("MikaBooM/1.0", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+    if (!hInternet) goto cleanup;
+    
+    // 连接到 GitHub API
+    hConnect = InternetConnectA(hInternet, GITHUB_API_URL, INTERNET_DEFAULT_HTTPS_PORT,
+                                NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+    if (!hConnect) goto cleanup;
+    
+    // 打开请求
+    hRequest = HttpOpenRequestA(hConnect, "GET", path, NULL, NULL, NULL,
+                                INTERNET_FLAG_SECURE | INTERNET_FLAG_RELOAD, 0);
+    if (!hRequest) goto cleanup;
+    
+    // 设置 User-Agent
+    HttpAddRequestHeadersA(hRequest, headers, -1, HTTP_ADDREQ_FLAG_ADD);
+    
+    // 发送请求
+    if (!HttpSendRequestA(hRequest, NULL, 0, NULL, 0)) goto cleanup;
+    
+    // 读取响应
+    memset(buffer, 0, sizeof(buffer));
+    
+    while (InternetReadFile(hRequest, buffer, sizeof(buffer) - 1, &bytesRead) && bytesRead > 0) {
+        buffer[bytesRead] = '\0';
+        response += buffer;
+        memset(buffer, 0, sizeof(buffer));  // 清空 buffer
+    }
+    
+    // 简单解析 JSON（使用代码块避免 goto 问题）
+    {
+        size_t tagPos = response.find("\"tag_name\"");
+        if (tagPos != std::string::npos) {
+            size_t startPos = response.find("\"", tagPos + 11);
+            if (startPos != std::string::npos) {
+                size_t endPos = response.find("\"", startPos + 1);
+                if (endPos != std::string::npos) {
+                    std::string tag = response.substr(startPos + 1, endPos - startPos - 1);
+                    // 移除 'v' 前缀（如果有）
+                    if (!tag.empty() && tag[0] == 'v') {
+                        tag = tag.substr(1);
+                    }
+                    latestVersion = tag;
+                }
+            }
+        }
+        
+        size_t urlPos = response.find("\"html_url\"");
+        if (urlPos != std::string::npos) {
+            size_t startPos = response.find("\"", urlPos + 11);
+            if (startPos != std::string::npos) {
+                size_t endPos = response.find("\"", startPos + 1);
+                if (endPos != std::string::npos) {
+                    downloadUrl = response.substr(startPos + 1, endPos - startPos - 1);
+                }
+            }
+        }
+    }
+    
+    result = !latestVersion.empty();
+    
+cleanup:
+    if (hRequest) InternetCloseHandle(hRequest);
+    if (hConnect) InternetCloseHandle(hConnect);
+    if (hInternet) InternetCloseHandle(hInternet);
+    
+    return result;
 }

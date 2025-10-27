@@ -94,6 +94,10 @@ cooldown=60
 | Windows 2000  | ✅        |
 | Windows XP    | ✅        |
 | Windows Vista | ✅        |
+| Windows 2003  | ✅        |
+| Windows 2008  | ✅        |
+| Windows 2012  | ✅        |
+| Windows 2016  | ✅        |
 | Windows 7     | ✅        |
 | Windows 8/8.1 | ✅        |
 | Windows 10    | ✅        |
@@ -110,3 +114,19 @@ Makoto
 ## Issues
 
 如果有任何问题，请在 [GitHub Issue](https://github.com/MakotoArai-CN/MikaBooM_CPP/issues) 页面提交。
+
+## Changelog
+
+- Version 1.0.1: 优化代码结构，修复BUG
+  - 优化代码结构，提高可读性
+  - 修复BUG，修复CPU和内存阈值设置太大或者太小时不准确的问题
+  - 修复托盘图标显示问题
+  - 支持Github仓库更新
+
+- Version 1.0.0: Initial release
+  - 初始测试版本，支持Windows 2000 到 Windows 11 全系列
+  - 支持CPU和内存使用率实时监控
+  - 支持智能负载调整
+  - 支持系统托盘图标
+  - 支持开机自启动
+  - 支持配置文件

@@ -31,7 +31,7 @@ CXXFLAGS = -std=c++11 -Wall -O2 \
 LDFLAGS = -static-libgcc -static-libstdc++ \
           -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic \
           -lkernel32 -luser32 -lshell32 -ladvapi32 \
-          -lpsapi -lcomctl32 -lpdh \
+          -lpsapi -lcomctl32 -lpdh -lwininet \
           -mconsole
 
 # 源文件
@@ -43,7 +43,8 @@ SOURCES = $(SRCDIR)/main.cpp \
           $(SRCDIR)/platform/system_tray.cpp \
           $(SRCDIR)/platform/autostart.cpp \
           $(SRCDIR)/utils/console_utils.cpp \
-          $(SRCDIR)/utils/version.cpp
+          $(SRCDIR)/utils/version.cpp \
+          $(SRCDIR)/utils/updater.cpp
 
 RESOURCE = $(RESDIR)/resource.rc
 OBJECTS = $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)

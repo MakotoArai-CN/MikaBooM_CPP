@@ -29,8 +29,8 @@ bool SystemTray::Create() {
         return false;
     }
     
-    hwnd = CreateWindowExA(0, "MikaBooMTrayClass", "MikaBooM", 0,
-        0, 0, 0, 0, HWND_MESSAGE, NULL, GetModuleHandle(NULL), NULL);
+    hwnd = CreateWindowExA(0, "MikaBooMTrayClass", "MikaBooM", 0, 
+                          0, 0, 0, 0, HWND_MESSAGE, NULL, GetModuleHandle(NULL), NULL);
     
     if (!hwnd) {
         return false;
@@ -41,9 +41,16 @@ bool SystemTray::Create() {
     nid.uID = 1;
     nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
     nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     
-    // 系统托盘始终使用英文
+    // 尝试加载自定义图标
+    HINSTANCE hInstance = GetModuleHandle(NULL);
+    nid.hIcon = LoadIconA(hInstance, MAKEINTRESOURCEA(IDI_MAIN));
+    
+    // 如果自定义图标加载失败，使用默认图标
+    if (!nid.hIcon) {
+        nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    }
+    
     strncpy(nid.szTip, "MikaBooM - Resource Monitor", sizeof(nid.szTip) - 1);
     nid.szTip[sizeof(nid.szTip) - 1] = '\0';
     
@@ -103,12 +110,10 @@ void SystemTray::CreateTrayMenu() {
     }
     
     hMenu = CreatePopupMenu();
-    
-    // 系统托盘菜单始终使用英文
-    AppendMenuA(hMenu, MF_STRING, ID_TRAY_SHOW,
-        g_show_window ? "Hide &Window" : "&Show Window");
-    AppendMenuA(hMenu, MF_STRING | (AutoStart::IsEnabled() ? MF_CHECKED : 0),
-        ID_TRAY_AUTOSTART, "&Auto Start");
+    AppendMenuA(hMenu, MF_STRING, ID_TRAY_SHOW, 
+                g_show_window ? "Hide &Window" : "&Show Window");
+    AppendMenuA(hMenu, MF_STRING | (AutoStart::IsEnabled() ? MF_CHECKED : 0), 
+                ID_TRAY_AUTOSTART, "&Auto Start");
     AppendMenuA(hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenuA(hMenu, MF_STRING, ID_TRAY_EXIT, "E&xit");
 }
@@ -167,6 +172,7 @@ void SystemTray::OnTrayIcon(LPARAM lParam) {
     if (lParam == WM_RBUTTONUP) {
         POINT pt;
         GetCursorPos(&pt);
+        
         CreateTrayMenu();
         SetForegroundWindow(hwnd);
         TrackPopupMenu(hMenu, TPM_RIGHTBUTTON, pt.x, pt.y, 0, hwnd, NULL);

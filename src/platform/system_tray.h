@@ -8,6 +8,9 @@
 #define ID_TRAY_SHOW 1002
 #define ID_TRAY_AUTOSTART 1003
 
+// 图标资源ID
+#define IDI_MAIN 101
+
 class SystemTray {
 private:
     HWND hwnd;
@@ -18,7 +21,7 @@ private:
 public:
     SystemTray();
     ~SystemTray();
-
+    
     bool Create();
     void Destroy();
     void UpdateTooltip(const char* text);
