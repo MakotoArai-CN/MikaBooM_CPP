@@ -78,11 +78,12 @@ MikaBooM.exe -noauto
 
 ```ini
 [General]
-cpu_threshold=70
-memory_threshold=70
+cpu_threshold=45
+memory_threshold=69
 auto_start=true
 show_window=true
 update_interval=2
+check_updates=true
 
 [Notification]
 enabled=true
