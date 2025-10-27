@@ -3,7 +3,7 @@
     <h1>MikaBooM C++ Edition</h1>
 </div>
 
-跨平台系统资源监控与调整工具 - C++版本，让你的Windows发光发热！
+Windows系统资源监控与调整工具 - C++版本，让你的Windows发光发热！
 
 > Windows 7 以上系统建议使用 Go版本[MikaBooM](https://github.com/MakotoArai-CN/MikaBooM)，更稳定，跨平台能力更强，程序数据更精确。
 >
