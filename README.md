@@ -70,6 +70,9 @@ MikaBooM.exe -auto
 
 # 禁用自启动
 MikaBooM.exe -noauto
+
+# 更新程序
+MikaBooM.exe -update
 ```
 
 ## 配置文件
