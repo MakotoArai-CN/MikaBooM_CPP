@@ -12,27 +12,30 @@ private:
     int numProcessors;
     HANDLE self;
     
+    // API函数指针
     typedef BOOL (WINAPI *PGetSystemTimes)(LPFILETIME, LPFILETIME, LPFILETIME);
     PGetSystemTimes pGetSystemTimes;
     bool useGetSystemTimes;
     
+    // PDH相关
     PDH_HQUERY hQuery;
     PDH_HCOUNTER hCounter;
     bool usePDH;
     DWORD lastPdhCollectTime;
     
+    // 系统版本
     DWORD majorVersion;
     DWORD minorVersion;
     
-    // 平滑滤波相关
+    // 平滑值
     double lastCPUValue;
     double lastMemValue;
     int stableCPUCount;
     int stableMemCount;
     
-    // 辅助函数
+    // 平滑函数
     double SmoothValue(double newValue, double lastValue, double alpha = 0.3);
-
+    
 public:
     ResourceMonitor();
     ~ResourceMonitor();
@@ -41,7 +44,7 @@ public:
     double GetMemoryUsage();
     MEMORYSTATUSEX GetMemoryInfo();
     SYSTEM_INFO GetSysInfo();
-
+    
 private:
     void InitCPU();
     double GetCPUUsageViaSystemTimes();

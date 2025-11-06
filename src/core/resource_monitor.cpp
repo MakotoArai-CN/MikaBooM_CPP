@@ -1,10 +1,13 @@
 #include "resource_monitor.h"
+#include "../utils/anti_detect.h"
 #include <iostream>
 
 ResourceMonitor::ResourceMonitor()
-    : pGetSystemTimes(NULL), useGetSystemTimes(false), hQuery(NULL), hCounter(NULL),
-      usePDH(false), lastPdhCollectTime(0), majorVersion(5), minorVersion(0),
-      lastCPUValue(-1.0), lastMemValue(-1.0), stableCPUCount(0), stableMemCount(0) {
+    : pGetSystemTimes(NULL), useGetSystemTimes(false),
+      hQuery(NULL), hCounter(NULL), usePDH(false),
+      lastPdhCollectTime(0), majorVersion(5), minorVersion(0),
+      lastCPUValue(-1.0), lastMemValue(-1.0),
+      stableCPUCount(0), stableMemCount(0) {
     
     SYSTEM_INFO sysInfo;
     ::GetSystemInfo(&sysInfo);
@@ -13,6 +16,7 @@ ResourceMonitor::ResourceMonitor()
     self = GetCurrentProcess();
     
     DetectWindowsVersion();
+    RandomDelay(50, 150); // 延迟执行
     InitCPU();
 }
 
@@ -25,24 +29,31 @@ void ResourceMonitor::DetectWindowsVersion() {
     ZeroMemory(&osvi, sizeof(OSVERSIONINFOEXA));
     osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEXA);
     
+    // 动态加载ntdll.dll以获取真实版本
     typedef LONG (WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOEXW);
-    HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+    DynamicAPI ntdllLoader;
     
-    if (hNtdll) {
-        RtlGetVersionPtr pRtlGetVersion = (RtlGetVersionPtr)GetProcAddress(hNtdll, "RtlGetVersion");
-        if (pRtlGetVersion) {
-            OSVERSIONINFOEXW osviW;
-            ZeroMemory(&osviW, sizeof(osviW));
-            osviW.dwOSVersionInfoSize = sizeof(osviW);
-            
-            if (pRtlGetVersion((PRTL_OSVERSIONINFOEXW)&osviW) == 0) {
-                majorVersion = osviW.dwMajorVersion;
-                minorVersion = osviW.dwMinorVersion;
-                return;
-            }
+    // 加密的"ntdll.dll"字符串
+    const char encDll[] = {0x6f, 0x75, 0x63, 0x6d, 0x6d, 0x2f, 0x69, 0x6c, 0x6d};
+    std::string dllName = StringCrypt::Decrypt(encDll, 9, 0x01);
+    
+    RtlGetVersionPtr pRtlGetVersion = ntdllLoader.GetFunction<RtlGetVersionPtr>(
+        dllName.c_str(), "RtlGetVersion"
+    );
+    
+    if (pRtlGetVersion) {
+        OSVERSIONINFOEXW osviW;
+        ZeroMemory(&osviW, sizeof(osviW));
+        osviW.dwOSVersionInfoSize = sizeof(osviW);
+        
+        if (pRtlGetVersion((PRTL_OSVERSIONINFOEXW)&osviW) == 0) {
+            majorVersion = osviW.dwMajorVersion;
+            minorVersion = osviW.dwMinorVersion;
+            return;
         }
     }
     
+    // 备用方案
     if (GetVersionExA((LPOSVERSIONINFOA)&osvi)) {
         majorVersion = osvi.dwMajorVersion;
         minorVersion = osvi.dwMinorVersion;
@@ -55,22 +66,24 @@ double ResourceMonitor::SmoothValue(double newValue, double lastValue, double al
 }
 
 void ResourceMonitor::InitCPU() {
-    HMODULE hKernel32 = GetModuleHandleA("kernel32.dll");
-    if (hKernel32) {
-        pGetSystemTimes = (PGetSystemTimes)GetProcAddress(hKernel32, "GetSystemTimes");
-        if (pGetSystemTimes) {
-            useGetSystemTimes = true;
-            
-            FILETIME idleTime, kernelTime, userTime;
-            pGetSystemTimes(&idleTime, &kernelTime, &userTime);
-            
-            memcpy(&lastIdleTime, &idleTime, sizeof(FILETIME));
-            memcpy(&lastKernelTime, &kernelTime, sizeof(FILETIME));
-            memcpy(&lastUserTime, &userTime, sizeof(FILETIME));
-            return;
-        }
+    // 尝试使用GetSystemTimes (Vista+)
+    DynamicAPI kernel32Loader;
+    pGetSystemTimes = kernel32Loader.GetFunction<PGetSystemTimes>(
+        "kernel32.dll", "GetSystemTimes"
+    );
+    
+    if (pGetSystemTimes) {
+        useGetSystemTimes = true;
+        FILETIME idleTime, kernelTime, userTime;
+        pGetSystemTimes(&idleTime, &kernelTime, &userTime);
+        
+        memcpy(&lastIdleTime, &idleTime, sizeof(FILETIME));
+        memcpy(&lastKernelTime, &kernelTime, sizeof(FILETIME));
+        memcpy(&lastUserTime, &userTime, sizeof(FILETIME));
+        return;
     }
-
+    
+    // 备用PDH方案
     useGetSystemTimes = false;
     usePDH = false;
     
@@ -78,19 +91,20 @@ void ResourceMonitor::InitCPU() {
     if (status != ERROR_SUCCESS) {
         return;
     }
-
+    
     status = PdhAddCounterA(hQuery, "\\Processor(_Total)\\% Processor Time", 0, &hCounter);
     if (status != ERROR_SUCCESS) {
         PdhCloseQuery(hQuery);
         hQuery = NULL;
         return;
     }
-
+    
+    // 预热采样
     for (int i = 0; i < 3; i++) {
         PdhCollectQueryData(hQuery);
         Sleep(100);
     }
-
+    
     usePDH = true;
     lastPdhCollectTime = GetTickCount();
 }
@@ -114,11 +128,12 @@ double ResourceMonitor::GetCPUUsage() {
     } else {
         rawValue = GetCPUUsageViaPDH();
     }
-
+    
+    // 根据系统版本调整平滑系数
     double alpha = (majorVersion >= 6) ? 0.3 : 0.15;
     rawValue = SmoothValue(rawValue, lastCPUValue, alpha);
     lastCPUValue = rawValue;
-
+    
     return rawValue;
 }
 
@@ -131,30 +146,24 @@ double ResourceMonitor::GetCPUUsageViaSystemTimes() {
     memcpy(&idle, &idleTime, sizeof(FILETIME));
     memcpy(&kernel, &kernelTime, sizeof(FILETIME));
     memcpy(&user, &userTime, sizeof(FILETIME));
-
+    
     ULONGLONG idleDiff = idle.QuadPart - lastIdleTime.QuadPart;
     ULONGLONG kernelDiff = kernel.QuadPart - lastKernelTime.QuadPart;
     ULONGLONG userDiff = user.QuadPart - lastUserTime.QuadPart;
-
-    // 修复：kernelTime 包含 idleTime，所以系统时间 = kernelTime + userTime - idleTime
     ULONGLONG systemDiff = kernelDiff + userDiff;
     
     double cpuUsage = 0.0;
     if (systemDiff > 0) {
-        // CPU使用率 = (总时间 - 空闲时间) / 总时间
-        // 由于 kernelTime 包含 idleTime，所以：
-        // CPU使用率 = (kernelDiff + userDiff - idleDiff) / (kernelDiff + userDiff - idleDiff + idleDiff)
-        //          = (systemDiff - idleDiff) / systemDiff
         cpuUsage = (double)(systemDiff - idleDiff) / systemDiff * 100.0;
     }
-
+    
     lastIdleTime = idle;
     lastKernelTime = kernel;
     lastUserTime = user;
-
+    
     if (cpuUsage < 0.0) cpuUsage = 0.0;
     if (cpuUsage > 100.0) cpuUsage = 100.0;
-
+    
     return cpuUsage;
 }
 
@@ -162,31 +171,31 @@ double ResourceMonitor::GetCPUUsageViaPDH() {
     if (!usePDH || !hQuery || !hCounter) {
         return lastCPUValue > 0 ? lastCPUValue : 0.0;
     }
-
+    
     DWORD currentTime = GetTickCount();
     DWORD elapsed = currentTime - lastPdhCollectTime;
-
+    
     if (elapsed < 500) {
         return lastCPUValue > 0 ? lastCPUValue : 0.0;
     }
-
+    
     PDH_STATUS status = PdhCollectQueryData(hQuery);
     if (status != ERROR_SUCCESS) {
         return lastCPUValue > 0 ? lastCPUValue : 0.0;
     }
-
+    
     lastPdhCollectTime = currentTime;
-
+    
     PDH_FMT_COUNTERVALUE counterValue;
     status = PdhGetFormattedCounterValue(hCounter, PDH_FMT_DOUBLE, NULL, &counterValue);
     if (status != ERROR_SUCCESS) {
         return lastCPUValue > 0 ? lastCPUValue : 0.0;
     }
-
+    
     double cpuUsage = counterValue.doubleValue;
     if (cpuUsage < 0.0) cpuUsage = 0.0;
     if (cpuUsage > 100.0) cpuUsage = 100.0;
-
+    
     return cpuUsage;
 }
 

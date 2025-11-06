@@ -1,4 +1,5 @@
 #include "cpu_worker.h"
+#include "../utils/anti_detect.h"
 #include <cmath>
 
 #ifndef M_PI
@@ -7,19 +8,20 @@
 
 CPUWorker::CPUWorker(int thresh)
     : threshold(thresh), running(0), intensity(30), lastAdjustTime(0) {
+    
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
     numWorkers = sysInfo.dwNumberOfProcessors;
+    
     InitializeCriticalSection(&adjustLock);
     
     // 根据CPU核心数调整冷却时间
-    // 核心多，调整可以更频繁
     if (numWorkers >= 16) {
-        adjustCooldown = 300;  // 16核以上：300ms
+        adjustCooldown = 300;
     } else if (numWorkers >= 8) {
-        adjustCooldown = 400;  // 8-15核：400ms
+        adjustCooldown = 400;
     } else {
-        adjustCooldown = 500;  // 8核以下：500ms
+        adjustCooldown = 500;
     }
 }
 
@@ -33,7 +35,10 @@ void CPUWorker::Start() {
     
     InterlockedExchange(&intensity, 30);
     lastAdjustTime = GetTickCount();
+    
     workers.clear();
+    
+    RandomDelay(100, 300); // 延迟启动
     
     for (int i = 0; i < numWorkers; i++) {
         HANDLE hThread = CreateThread(NULL, 0, WorkerThreadProc, this, 0, NULL);
@@ -41,6 +46,8 @@ void CPUWorker::Start() {
             SetThreadPriority(hThread, THREAD_PRIORITY_BELOW_NORMAL);
             workers.push_back(hThread);
         }
+        
+        RandomDelay(10, 50); // 分散启动
     }
 }
 
@@ -49,10 +56,12 @@ void CPUWorker::Stop() {
     
     if (!workers.empty()) {
         WaitForMultipleObjects((DWORD)workers.size(), &workers[0], TRUE, 5000);
+        
         for (size_t i = 0; i < workers.size(); i++) {
             CloseHandle(workers[i]);
         }
     }
+    
     workers.clear();
     InterlockedExchange(&intensity, 0);
 }
@@ -64,6 +73,9 @@ DWORD WINAPI CPUWorker::WorkerThreadProc(LPVOID lpParam) {
 }
 
 void CPUWorker::WorkerThread() {
+    // 随机初始延迟
+    RandomDelay(0, 100);
+    
     while (running) {
         LONG currentIntensity = intensity;
         DWORD workDuration = currentIntensity;
@@ -83,23 +95,21 @@ void CPUWorker::WorkerThread() {
 }
 
 void CPUWorker::DoWork(int intensityLevel) {
-    // 增强计算负载以提高精确度
     volatile double result = 0;
     int iterations = 100 + intensityLevel * 10;
     
-    // 1. 计算π的近似值
+    // 数学运算（看起来像正常计算）
     for (int i = 0; i < iterations; i++) {
         result += pow(-1.0, i) / (2.0 * i + 1.0);
     }
+    
     volatile double piApprox = result * 4.0;
     
-    // 2. 三角函数计算
     for (int i = 0; i < iterations; i++) {
         double angle = i * 0.1;
         result += sin(angle) * cos(angle) * tan(angle);
     }
     
-    // 3. 矩阵运算
     volatile double matrix[10][10];
     for (int i = 0; i < 10; i++) {
         for (int j = 0; j < 10; j++) {
@@ -107,12 +117,10 @@ void CPUWorker::DoWork(int intensityLevel) {
         }
     }
     
-    // 4. 对数和指数运算
     for (int i = 1; i < iterations; i++) {
         result += log((double)i) * exp((double)(i % 10));
     }
     
-    // 5. 开方和幂运算
     for (int i = 1; i < iterations; i++) {
         result += sqrt((double)i) * pow((double)i, 1.5);
     }
@@ -126,6 +134,7 @@ double CPUWorker::GetUsage() const {
     
     double estimatedUsage = intensity;
     if (estimatedUsage > 100) estimatedUsage = 100;
+    
     return estimatedUsage;
 }
 
@@ -139,13 +148,13 @@ void CPUWorker::AdjustLoad(double currentWorkerUsage, double targetWorkerUsage) 
         LeaveCriticalSection(&adjustLock);
         return;
     }
+    
     lastAdjustTime = now;
     
     double diff = targetWorkerUsage - currentWorkerUsage;
     LONG currentIntensity = intensity;
     LONG newIntensity = currentIntensity;
     
-    // 使用更平滑的PID控制策略
     if (diff > 20) {
         newIntensity += 8;
     } else if (diff > 10) {

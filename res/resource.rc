@@ -2,8 +2,8 @@
 
 // 版本信息
 1 VERSIONINFO
-FILEVERSION    1,0,1,0
-PRODUCTVERSION 1,0,1,0
+FILEVERSION    1,0,2,0
+PRODUCTVERSION 1,0,2,0
 FILEFLAGSMASK  0x3F
 FILEFLAGS      0x0
 FILEOS         VOS_NT_WINDOWS32
@@ -16,12 +16,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "Makoto Studio"
             VALUE "FileDescription",  "MikaBooM Resource Monitor"
-            VALUE "FileVersion",      "1.0.1.0"
+            VALUE "FileVersion",      "1.0.2.0"
             VALUE "InternalName",     "MikaBooM"
             VALUE "LegalCopyright",   "Copyright (C) 2025 Makoto"
             VALUE "OriginalFilename", "MikaBooM.exe"
             VALUE "ProductName",      "MikaBooM C++ Edition"
-            VALUE "ProductVersion",   "1.0.1.0"
+            VALUE "ProductVersion",   "1.0.2.0"
         END
     END
     BLOCK "VarFileInfo"
@@ -30,5 +30,6 @@ BEGIN
     END
 END
 
-// 图标资源（如果icon.ico存在）
-101 ICON "icon.ico"
+// 图标资源 - 统一使用 IDI_MAIN (101)
+#define IDI_MAIN 101
+IDI_MAIN ICON "icon.ico"

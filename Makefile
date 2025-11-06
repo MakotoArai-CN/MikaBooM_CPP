@@ -1,138 +1,306 @@
 # MikaBooM C++ Edition Makefile
-# 支持 MinGW - 静态链接
+# 自动检测编译器并支持多架构 - Windows 2000+ 兼容版
 
-CXX = g++
-RC = windres
-TARGET = MikaBooM.exe
-SRCDIR = src
-RESDIR = res
-OBJDIR = build
+SHELL = cmd
 
-# 获取编译时间（使用 ISO 8601 格式，避免空格问题）
-# 格式: 2026-12-26T16:00:47
-EXPIRE_DATE := $(shell powershell -Command "Get-Date (Get-Date).AddYears(2) -Format 'yyyy-MM-ddTHH:mm:ss'")
+# 检测可用编译器
+CROSS_X86 := $(shell where i686-w64-mingw32-g++ 2>nul)
+CROSS_X64 := $(shell where x86_64-w64-mingw32-g++ 2>nul)
+CROSS_ARM := $(shell where arm-w64-mingw32-g++ 2>nul)
+CROSS_ARM64 := $(shell where aarch64-w64-mingw32-g++ 2>nul)
 
-# 如果 PowerShell 失败，使用备用方案
-ifeq ($(EXPIRE_DATE),)
-    CURRENT_YEAR := $(shell date +%Y)
-    EXPIRE_YEAR := $(shell echo $$(($(CURRENT_YEAR) + 2)))
-    EXPIRE_DATE := $(shell date +'$(EXPIRE_YEAR)-%m-%dT%H:%M:%S')
+LOCAL_GCC := $(shell where g++ 2>nul)
+LOCAL_RC := $(shell where windres 2>nul)
+
+# 检测本地编译器支持的架构
+ifdef LOCAL_GCC
+    GCC_TARGET := $(shell g++ -dumpmachine 2>nul)
+    ifeq ($(findstring x86_64,$(GCC_TARGET)),x86_64)
+        LOCAL_SUPPORTS_X64 = 1
+        LOCAL_SUPPORTS_X86 = 1
+    else ifeq ($(findstring i686,$(GCC_TARGET)),i686)
+        LOCAL_SUPPORTS_X86 = 1
+    else ifeq ($(findstring mingw32,$(GCC_TARGET)),mingw32)
+        LOCAL_SUPPORTS_X86 = 1
+    endif
 endif
 
-# 编译标志 - 基础静态链接 + 注入过期时间
-# 注意：使用单引号包裹宏定义值，避免空格问题
-CXXFLAGS = -std=c++11 -Wall -O2 \
-           -static-libgcc -static-libstdc++ \
-           -D_WIN32_WINNT=0x0500 \
-           -DWINVER=0x0500 \
-           -DEXPIRE_DATE=\"$(EXPIRE_DATE)\"
+SRCDIR = src
+RESDIR = res
 
-# 链接标志 - 静态链接 C++ 运行库，确保包含 PDH
-LDFLAGS = -static-libgcc -static-libstdc++ \
-          -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic \
-          -lkernel32 -luser32 -lshell32 -ladvapi32 \
-          -lpsapi -lcomctl32 -lpdh -lwininet \
-          -mconsole
+# 过期时间（全局）
+EXPIRE_DATE := $(shell powershell -Command "Get-Date (Get-Date).AddYears(2) -Format 'yyyy-MM-ddTHH:mm:ss'" 2>nul)
+ifeq ($(EXPIRE_DATE),)
+    EXPIRE_DATE := 2027-12-31T23:59:59
+endif
 
-# 源文件
-SOURCES = $(SRCDIR)/main.cpp \
-          $(SRCDIR)/core/resource_monitor.cpp \
-          $(SRCDIR)/core/config_manager.cpp \
-          $(SRCDIR)/core/cpu_worker.cpp \
-          $(SRCDIR)/core/memory_worker.cpp \
-          $(SRCDIR)/platform/system_tray.cpp \
-          $(SRCDIR)/platform/autostart.cpp \
-          $(SRCDIR)/utils/console_utils.cpp \
-          $(SRCDIR)/utils/version.cpp \
-          $(SRCDIR)/utils/updater.cpp
+# 根据传入的ARCH参数设置编译器和标志
+ifdef ARCH
+    ifeq ($(ARCH),x86)
+        ifdef CROSS_X86
+            CXX = i686-w64-mingw32-g++
+            RC = i686-w64-mingw32-windres
+            ARCH_FLAGS = -m32
+        else ifdef LOCAL_SUPPORTS_X86
+            CXX = g++
+            RC = windres
+            ARCH_FLAGS = -m32
+        endif
+        ARCH_SUFFIX = _x86
+    else ifeq ($(ARCH),x64)
+        ifdef CROSS_X64
+            CXX = x86_64-w64-mingw32-g++
+            RC = x86_64-w64-mingw32-windres
+            ARCH_FLAGS = -m64
+        else ifdef LOCAL_SUPPORTS_X64
+            CXX = g++
+            RC = windres
+            ARCH_FLAGS = -m64
+        endif
+        ARCH_SUFFIX = _x64
+    else ifeq ($(ARCH),arm)
+        ifdef CROSS_ARM
+            CXX = arm-w64-mingw32-g++
+            RC = arm-w64-mingw32-windres
+            ARCH_FLAGS = -march=armv7-a
+        endif
+        ARCH_SUFFIX = _arm
+    else ifeq ($(ARCH),arm64)
+        ifdef CROSS_ARM64
+            CXX = aarch64-w64-mingw32-g++
+            RC = aarch64-w64-mingw32-windres
+            ARCH_FLAGS = -march=armv8-a
+        endif
+        ARCH_SUFFIX = _arm64
+    endif
 
-RESOURCE = $(RESDIR)/resource.rc
-OBJECTS = $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
-RESOBJECT = $(OBJDIR)/resource.o
+    TARGET = MikaBooM$(ARCH_SUFFIX).exe
+    OBJDIR = build\$(ARCH)
 
-# 默认目标
-all: directories $(TARGET)
+    CXXFLAGS = -std=c++11 -Wall -O2 $(ARCH_FLAGS) \
+               -static-libgcc -static-libstdc++ \
+               -D_WIN32_WINNT=0x0500 \
+               -DWINVER=0x0500 \
+               -DEXPIRE_DATE=\"$(EXPIRE_DATE)\" \
+               -ffunction-sections -fdata-sections
 
-# 创建目录
+    LDFLAGS = -static -static-libgcc -static-libstdc++ $(ARCH_FLAGS) \
+              -Wl,--gc-sections \
+              -lkernel32 -luser32 -lshell32 -ladvapi32 \
+              -lpsapi -lcomctl32 -lpdh -lwininet \
+              -mconsole
+
+    OBJECTS = $(OBJDIR)\main.o \
+              $(OBJDIR)\core\resource_monitor.o \
+              $(OBJDIR)\core\config_manager.o \
+              $(OBJDIR)\core\cpu_worker.o \
+              $(OBJDIR)\core\memory_worker.o \
+              $(OBJDIR)\platform\system_tray.o \
+              $(OBJDIR)\platform\autostart.o \
+              $(OBJDIR)\utils\console_utils.o \
+              $(OBJDIR)\utils\version.o \
+              $(OBJDIR)\utils\updater.o
+
+    RESOBJECT = $(OBJDIR)\resource.o
+endif
+
+# ========================================
+# 默认目标：自动编译
+# ========================================
+.DEFAULT_GOAL := auto-build
+
+all: auto-build
+
+# 自动编译（根据编译器能力）
+auto-build:
+	@echo ========================================
+	@echo MikaBooM Auto Build System
+	@echo ========================================
+	@echo Detecting compiler capabilities...
+ifndef LOCAL_GCC
+	@echo [ERROR] No GCC compiler found!
+	@echo Please install MinGW-w64
+	@exit 1
+endif
+	@echo [OK] GCC found: $(LOCAL_GCC)
+	@echo [OK] Target: $(GCC_TARGET)
+	@echo ========================================
+	@echo Supported architectures:
+ifdef LOCAL_SUPPORTS_X86
+	@echo   [OK] x86 (32-bit) - Will compile
+	@$(MAKE) --no-print-directory ARCH=x86 single-build
+else
+	@echo   [SKIP] x86 (32-bit) - Not supported
+endif
+ifdef LOCAL_SUPPORTS_X64
+	@echo   [OK] x64 (64-bit) - Will compile
+	@$(MAKE) --no-print-directory ARCH=x64 single-build
+else
+	@echo   [SKIP] x64 (64-bit) - Not supported
+endif
+ifdef CROSS_ARM
+	@echo   [OK] ARM (32-bit) - Will compile
+	@$(MAKE) --no-print-directory ARCH=arm single-build
+endif
+ifdef CROSS_ARM64
+	@echo   [OK] ARM64 (64-bit) - Will compile
+	@$(MAKE) --no-print-directory ARCH=arm64 single-build
+endif
+	@echo ========================================
+	@echo Build Summary
+	@echo ========================================
+	@if exist MikaBooM_x86.exe echo [OK] MikaBooM_x86.exe
+	@if exist MikaBooM_x64.exe echo [OK] MikaBooM_x64.exe
+	@if exist MikaBooM_arm.exe echo [OK] MikaBooM_arm.exe
+	@if exist MikaBooM_arm64.exe echo [OK] MikaBooM_arm64.exe
+	@echo ========================================
+
+# ========================================
+# 单独架构编译（用户可调用）
+# ========================================
+x86:
+	@$(MAKE) --no-print-directory ARCH=x86 single-build
+
+x64:
+	@$(MAKE) --no-print-directory ARCH=x64 single-build
+
+arm:
+	@$(MAKE) --no-print-directory ARCH=arm single-build
+
+arm64:
+	@$(MAKE) --no-print-directory ARCH=arm64 single-build
+
+# ========================================
+# 单个架构编译流程
+# ========================================
+single-build: directories info-build $(TARGET)
+
+info-build:
+	@echo ========================================
+	@echo Building: $(TARGET)
+	@echo Compiler: $(CXX)
+	@echo Arch: $(ARCH)
+	@echo Expire: $(EXPIRE_DATE)
+	@echo ========================================
+
 directories:
+	@if not exist build mkdir build
 	@if not exist $(OBJDIR) mkdir $(OBJDIR)
 	@if not exist $(OBJDIR)\core mkdir $(OBJDIR)\core
 	@if not exist $(OBJDIR)\platform mkdir $(OBJDIR)\platform
 	@if not exist $(OBJDIR)\utils mkdir $(OBJDIR)\utils
 
-# 链接
+# 目标文件
 $(TARGET): $(OBJECTS) $(RESOBJECT)
-	@echo ========================================
-	@echo Build Information:
-	@echo ----------------------------------------
-	@echo Expire Date: $(EXPIRE_DATE)
-	@echo ========================================
 	@echo Linking $(TARGET)...
+	@$(CXX) $(OBJECTS) $(RESOBJECT) -o $@ $(LDFLAGS)
+	@strip -s $@ 2>nul || echo [INFO] Strip skipped
 	@echo ========================================
-	$(CXX) $(OBJECTS) $(RESOBJECT) -o $@ $(LDFLAGS)
-	@echo Stripping symbols to reduce size...
-	@strip -s $@
+	@echo BUILD SUCCESS: $(TARGET)
+	@echo Target OS: Windows 2000 / XP / Vista / 7+
 	@echo ========================================
-	@echo Build complete: $(TARGET)
-	@echo Expire Date: $(EXPIRE_DATE)
-	@echo ========================================
-	@dir $(TARGET) | findstr $(TARGET)
+	@if exist $(TARGET) dir $(TARGET) | findstr $(TARGET)
 	@echo ========================================
 
-# 编译源文件
-$(OBJDIR)/%.o: $(SRCDIR)/%.cpp
-	@echo Compiling $<...
+# ========================================
+# 编译规则
+# ========================================
+$(OBJDIR)\main.o: $(SRCDIR)\main.cpp
+	@echo [CXX] main.cpp
 	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# 编译资源文件
-$(OBJDIR)/resource.o: $(RESOURCE)
-	@echo Compiling resources...
+$(OBJDIR)\core\resource_monitor.o: $(SRCDIR)\core\resource_monitor.cpp
+	@echo [CXX] resource_monitor.cpp
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)\core\config_manager.o: $(SRCDIR)\core\config_manager.cpp
+	@echo [CXX] config_manager.cpp
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)\core\cpu_worker.o: $(SRCDIR)\core\cpu_worker.cpp
+	@echo [CXX] cpu_worker.cpp
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)\core\memory_worker.o: $(SRCDIR)\core\memory_worker.cpp
+	@echo [CXX] memory_worker.cpp
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)\platform\system_tray.o: $(SRCDIR)\platform\system_tray.cpp
+	@echo [CXX] system_tray.cpp
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)\platform\autostart.o: $(SRCDIR)\platform\autostart.cpp
+	@echo [CXX] autostart.cpp
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)\utils\console_utils.o: $(SRCDIR)\utils\console_utils.cpp
+	@echo [CXX] console_utils.cpp
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)\utils\version.o: $(SRCDIR)\utils\version.cpp
+	@echo [CXX] version.cpp
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)\utils\updater.o: $(SRCDIR)\utils\updater.cpp
+	@echo [CXX] updater.cpp
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJDIR)\resource.o: $(RESDIR)\resource.rc
+	@echo [RC] resource.rc
 	@$(RC) -D_WIN32_WINNT=0x0500 $< -o $@
 
-# 显示构建信息
-info:
-	@echo ========================================
-	@echo MikaBooM Build Information
-	@echo ========================================
-	@echo Expire Date: $(EXPIRE_DATE)
-	@echo ========================================
-
-# 检查依赖项
-check: $(TARGET)
-	@echo ========================================
-	@echo Checking DLL dependencies...
-	@echo ========================================
-	@objdump -p $(TARGET) | findstr "DLL Name"
-	@echo ========================================
-
-# 清理
+# ========================================
+# 实用工具
+# ========================================
 clean:
-	@echo Cleaning build files...
-	@if exist $(OBJDIR) rmdir /s /q $(OBJDIR)
-	@if exist $(TARGET) del $(TARGET)
+	@echo Cleaning...
+	@if exist build rmdir /s /q build
+	@if exist MikaBooM_x86.exe del /f /q MikaBooM_x86.exe
+	@if exist MikaBooM_x64.exe del /f /q MikaBooM_x64.exe
+	@if exist MikaBooM_arm.exe del /f /q MikaBooM_arm.exe
+	@if exist MikaBooM_arm64.exe del /f /q MikaBooM_arm64.exe
 	@echo Clean complete.
 
-# 完全重新编译
-rebuild: clean all
+rebuild: clean auto-build
 
-# 运行
-run: $(TARGET)
-	$(TARGET)
+check:
+	@echo ========================================
+	@echo Compiler Detection
+	@echo ========================================
+	@echo Local GCC: $(LOCAL_GCC)
+	@echo Local RC: $(LOCAL_RC)
+	@echo GCC Target: $(GCC_TARGET)
+	@echo ========================================
+	@echo Architecture Support:
+ifdef LOCAL_SUPPORTS_X86
+	@echo   [OK] x86 (32-bit)
+else
+	@echo   [SKIP] x86 (32-bit)
+endif
+ifdef LOCAL_SUPPORTS_X64
+	@echo   [OK] x64 (64-bit)
+else
+	@echo   [SKIP] x64 (64-bit)
+endif
+	@echo ========================================
+	@echo Cross Compilers:
+	@echo   x86:   $(CROSS_X86)
+	@echo   x64:   $(CROSS_X64)
+	@echo   ARM:   $(CROSS_ARM)
+	@echo   ARM64: $(CROSS_ARM64)
+	@echo ========================================
 
-# 运行测试
-test: $(TARGET)
+check-deps:
 	@echo ========================================
-	@echo Testing parameters...
+	@echo Checking DLL Dependencies
 	@echo ========================================
-	@echo.
-	@echo Test 1: Help
-	@echo ----------------------------------------
-	@$(TARGET) -h
-	@echo.
-	@echo Test 2: Version
-	@echo ----------------------------------------
-	@$(TARGET) -v
-	@echo.
+	@if exist MikaBooM_x86.exe (echo MikaBooM_x86.exe: & objdump -p MikaBooM_x86.exe | findstr "DLL Name" & echo ========================================)
+	@if exist MikaBooM_x64.exe (echo MikaBooM_x64.exe: & objdump -p MikaBooM_x64.exe | findstr "DLL Name" & echo ========================================)
+	@echo All DLLs should be available in Windows 2000
 	@echo ========================================
 
-.PHONY: all clean rebuild run check test directories info
+run:
+	@if exist MikaBooM_x64.exe (MikaBooM_x64.exe) else if exist MikaBooM_x86.exe (MikaBooM_x86.exe) else echo No executable found
+
+.PHONY: all auto-build x86 x64 arm arm64 single-build info-build \
+        directories clean rebuild check check-deps run
