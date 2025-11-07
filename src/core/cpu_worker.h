@@ -4,7 +4,6 @@
 
 class CPUWorker {
 private:
-    int threshold;
     volatile LONG running;
     volatile LONG intensity;
     std::vector<HANDLE> workers;

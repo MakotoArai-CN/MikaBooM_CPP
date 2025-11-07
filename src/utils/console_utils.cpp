@@ -35,6 +35,49 @@ void ConsoleUtils::Init() {
     isInitialized = true;
 }
 
+void ConsoleUtils::Reinit() {
+    // 强制重新初始化（用于控制台重新分配后）
+    isInitialized = false;
+    hConsole = NULL;
+    
+    // 短暂延迟，确保控制台完全初始化
+    Sleep(100);
+    
+    hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
+    if (GetConsoleScreenBufferInfo(hConsole, &consoleInfo)) {
+        originalAttributes = consoleInfo.wAttributes;
+    } else {
+        originalAttributes = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
+    }
+    
+    useUTF8 = IsWindows7OrLater();
+    
+    if (useUTF8) {
+        SetConsoleCP(65001);
+        SetConsoleOutputCP(65001);
+    } else {
+        SetConsoleCP(437);
+        SetConsoleOutputCP(437);
+    }
+    
+    Version::InitAsciiArt(useUTF8);
+    
+    isInitialized = true;
+    
+    // 清屏
+    COORD coordScreen = { 0, 0 };
+    DWORD cCharsWritten;
+    DWORD dwConSize;
+    
+    if (GetConsoleScreenBufferInfo(hConsole, &consoleInfo)) {
+        dwConSize = consoleInfo.dwSize.X * consoleInfo.dwSize.Y;
+        FillConsoleOutputCharacter(hConsole, (TCHAR)' ', dwConSize, coordScreen, &cCharsWritten);
+        FillConsoleOutputAttribute(hConsole, consoleInfo.wAttributes, dwConSize, coordScreen, &cCharsWritten);
+        SetConsoleCursorPosition(hConsole, coordScreen);
+    }
+}
+
 bool ConsoleUtils::IsWindows7OrLater() {
     return SystemInfo::IsWindows7OrLater();
 }
@@ -94,7 +137,7 @@ void ConsoleUtils::PrintSystemInfo() {
     
     if (useUTF8) {
         printf(">> 操作系统: %s\n", SystemInfo::GetOSName());
-        printf(">> CPU核心数: %lu\n", sysInfo.dwNumberOfProcessors);  // 修改：%d -> %lu
+        printf(">> CPU核心数: %lu\n", sysInfo.dwNumberOfProcessors);
         printf(">> 物理内存: %.2f GB\n", memInfo.ullTotalPhys / (1024.0 * 1024.0 * 1024.0));
         printf("\n");
         printf(">> 版本: %s\n", Version::GetVersion());
@@ -103,7 +146,7 @@ void ConsoleUtils::PrintSystemInfo() {
         printf(">> 作者: %s\n", Version::GetAuthor());
     } else {
         printf("OS: %s\n", SystemInfo::GetOSName());
-        printf("CPU Cores: %lu\n", sysInfo.dwNumberOfProcessors);  // 修改：%d -> %lu
+        printf("CPU Cores: %lu\n", sysInfo.dwNumberOfProcessors);
         printf("Physical Memory: %.2f GB\n", memInfo.ullTotalPhys / (1024.0 * 1024.0 * 1024.0));
         printf("\n");
         printf("Version: %s\n", Version::GetVersion());

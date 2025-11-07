@@ -1,6 +1,7 @@
 #include "system_tray.h"
 #include "../platform/autostart.h"
 #include "../utils/system_info.h"
+#include "../utils/console_utils.h"
 #include <cstring>
 
 extern volatile LONG g_running;
@@ -45,11 +46,9 @@ bool SystemTray::Create() {
     
     HINSTANCE hInstance = GetModuleHandle(NULL);
     
-    // 使用正确的资源ID (IDI_MAIN = 101)
     nid.hIcon = LoadIconA(hInstance, MAKEINTRESOURCEA(IDI_MAIN));
     
     if (!nid.hIcon) {
-        // 备用方案
         nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     }
     
@@ -138,13 +137,24 @@ LRESULT CALLBACK SystemTray::WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     
                 case ID_TRAY_SHOW:
                     if (g_show_window) {
+                        // 隐藏窗口
                         FreeConsole();
                         InterlockedExchange(&g_show_window, 0);
                     } else {
+                        // 显示窗口
                         AllocConsole();
+                        
+                        // 重新打开标准流
                         freopen("CONOUT$", "w", stdout);
                         freopen("CONOUT$", "w", stderr);
                         freopen("CONIN$", "r", stdin);
+                        
+                        // 重新初始化 ConsoleUtils
+                        ConsoleUtils::Reinit();
+                        
+                        // 显示欢迎信息
+                        ConsoleUtils::ShowWelcome();
+                        
                         InterlockedExchange(&g_show_window, 1);
                     }
                     

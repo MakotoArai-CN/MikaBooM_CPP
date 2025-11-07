@@ -1,27 +1,34 @@
+// MikaBooM Resource File
+// Compatible with both windres and llvm-rc
+
 #include <windows.h>
 
-// 版本信息
+// 图标资源 - 统一使用 IDI_MAIN (101)
+#define IDI_MAIN 101
+IDI_MAIN ICON "icon.ico"
+
+// 版本信息（数值替换宏定义）
 1 VERSIONINFO
 FILEVERSION    1,0,2,0
 PRODUCTVERSION 1,0,2,0
 FILEFLAGSMASK  0x3F
 FILEFLAGS      0x0
-FILEOS         VOS_NT_WINDOWS32
-FILETYPE       VFT_APP
+FILEOS         0x00040004L
+FILETYPE       0x00000001L
 FILESUBTYPE    0x0
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "CompanyName",      "Makoto Studio"
-            VALUE "FileDescription",  "MikaBooM Resource Monitor"
-            VALUE "FileVersion",      "1.0.2.0"
-            VALUE "InternalName",     "MikaBooM"
-            VALUE "LegalCopyright",   "Copyright (C) 2025 Makoto"
-            VALUE "OriginalFilename", "MikaBooM.exe"
-            VALUE "ProductName",      "MikaBooM C++ Edition"
-            VALUE "ProductVersion",   "1.0.2.0"
+            VALUE "CompanyName",      "Makoto Studio\0"
+            VALUE "FileDescription",  "MikaBooM Resource Monitor\0"
+            VALUE "FileVersion",      "1.0.2.0\0"
+            VALUE "InternalName",     "MikaBooM\0"
+            VALUE "LegalCopyright",   "Copyright (C) 2025 Makoto\0"
+            VALUE "OriginalFilename", "MikaBooM.exe\0"
+            VALUE "ProductName",      "MikaBooM C++ Edition\0"
+            VALUE "ProductVersion",   "1.0.2.0\0"
         END
     END
     BLOCK "VarFileInfo"
@@ -29,7 +36,3 @@ BEGIN
         VALUE "Translation", 0x409, 1200
     END
 END
-
-// 图标资源 - 统一使用 IDI_MAIN (101)
-#define IDI_MAIN 101
-IDI_MAIN ICON "icon.ico"

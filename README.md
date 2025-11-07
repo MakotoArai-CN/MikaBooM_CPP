@@ -29,6 +29,8 @@ Windows系统资源监控与调整工具 - C++版本，让你的Windows发光发
 ### 编译所有架构
 ```bash
 make all-arch
+# 或者
+# make
 ```
 
 ### 编译特定架构
@@ -136,6 +138,11 @@ Makoto
 如果有任何问题，请在 [GitHub Issue](https://github.com/MakotoArai-CN/MikaBooM_CPP/issues) 页面提交。
 
 ## Changelog
+
+- Version 1.0.3: 修复控制台显示BUG
+  - ✅ 修复托盘图标隐藏/显示窗口问题
+  - ✅ 优化控制台初始化逻辑
+  - ✅ 改用llvm-mingw编译
 
 - Version 1.0.2: 多架构支持 + 安全优化
   - ✅ 新增多架构编译支持 (x86/x64/ARM/ARM64)

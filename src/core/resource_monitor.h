@@ -1,7 +1,13 @@
 #pragma once
 #include <windows.h>
 #include <psapi.h>
-#include <pdh.h>
+
+// 条件编译：通过 Makefile 传递 USE_PDH 宏
+#ifdef USE_PDH
+    // x86/x64: 使用 PDH
+    #include <pdh.h>
+#endif
+
 #include <string>
 
 class ResourceMonitor {
@@ -17,11 +23,13 @@ private:
     PGetSystemTimes pGetSystemTimes;
     bool useGetSystemTimes;
     
-    // PDH相关
+#ifdef USE_PDH
+    // PDH相关（仅 x86/x64）
     PDH_HQUERY hQuery;
     PDH_HCOUNTER hCounter;
     bool usePDH;
     DWORD lastPdhCollectTime;
+#endif
     
     // 系统版本
     DWORD majorVersion;
@@ -30,8 +38,6 @@ private:
     // 平滑值
     double lastCPUValue;
     double lastMemValue;
-    int stableCPUCount;
-    int stableMemCount;
     
     // 平滑函数
     double SmoothValue(double newValue, double lastValue, double alpha = 0.3);
@@ -48,7 +54,9 @@ public:
 private:
     void InitCPU();
     double GetCPUUsageViaSystemTimes();
+#ifdef USE_PDH
     double GetCPUUsageViaPDH();
     void CleanupPDH();
+#endif
     void DetectWindowsVersion();
 };

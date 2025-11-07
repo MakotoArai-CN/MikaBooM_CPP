@@ -4,10 +4,12 @@
 
 ResourceMonitor::ResourceMonitor()
     : pGetSystemTimes(NULL), useGetSystemTimes(false),
+#ifdef USE_PDH
       hQuery(NULL), hCounter(NULL), usePDH(false),
-      lastPdhCollectTime(0), majorVersion(5), minorVersion(0),
-      lastCPUValue(-1.0), lastMemValue(-1.0),
-      stableCPUCount(0), stableMemCount(0) {
+      lastPdhCollectTime(0),
+#endif
+      majorVersion(5), minorVersion(0),
+      lastCPUValue(-1.0), lastMemValue(-1.0) {
     
     SYSTEM_INFO sysInfo;
     ::GetSystemInfo(&sysInfo);
@@ -16,12 +18,14 @@ ResourceMonitor::ResourceMonitor()
     self = GetCurrentProcess();
     
     DetectWindowsVersion();
-    RandomDelay(50, 150); // 延迟执行
+    RandomDelay(50, 150);
     InitCPU();
 }
 
 ResourceMonitor::~ResourceMonitor() {
+#ifdef USE_PDH
     CleanupPDH();
+#endif
 }
 
 void ResourceMonitor::DetectWindowsVersion() {
@@ -29,12 +33,10 @@ void ResourceMonitor::DetectWindowsVersion() {
     ZeroMemory(&osvi, sizeof(OSVERSIONINFOEXA));
     osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEXA);
     
-    // 动态加载ntdll.dll以获取真实版本
     typedef LONG (WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOEXW);
     DynamicAPI ntdllLoader;
     
-    // 加密的"ntdll.dll"字符串
-    const char encDll[] = {0x6f, 0x75, 0x63, 0x6d, 0x6d, 0x2f, 0x69, 0x6c, 0x6d};
+    const char encDll[] = {0x6f, 0x74, 0x67, 0x6e, 0x69, 0x2a, 0x63, 0x6a, 0x65};
     std::string dllName = StringCrypt::Decrypt(encDll, 9, 0x01);
     
     RtlGetVersionPtr pRtlGetVersion = ntdllLoader.GetFunction<RtlGetVersionPtr>(
@@ -53,7 +55,6 @@ void ResourceMonitor::DetectWindowsVersion() {
         }
     }
     
-    // 备用方案
     if (GetVersionExA((LPOSVERSIONINFOA)&osvi)) {
         majorVersion = osvi.dwMajorVersion;
         minorVersion = osvi.dwMinorVersion;
@@ -66,7 +67,6 @@ double ResourceMonitor::SmoothValue(double newValue, double lastValue, double al
 }
 
 void ResourceMonitor::InitCPU() {
-    // 尝试使用GetSystemTimes (Vista+)
     DynamicAPI kernel32Loader;
     pGetSystemTimes = kernel32Loader.GetFunction<PGetSystemTimes>(
         "kernel32.dll", "GetSystemTimes"
@@ -83,7 +83,8 @@ void ResourceMonitor::InitCPU() {
         return;
     }
     
-    // 备用PDH方案
+#ifdef USE_PDH
+    // PDH 备用方案（仅 x86/x64）
     useGetSystemTimes = false;
     usePDH = false;
     
@@ -99,7 +100,6 @@ void ResourceMonitor::InitCPU() {
         return;
     }
     
-    // 预热采样
     for (int i = 0; i < 3; i++) {
         PdhCollectQueryData(hQuery);
         Sleep(100);
@@ -107,8 +107,13 @@ void ResourceMonitor::InitCPU() {
     
     usePDH = true;
     lastPdhCollectTime = GetTickCount();
+#else
+    // ARM/ARM64: 不使用 PDH
+    useGetSystemTimes = false;
+#endif
 }
 
+#ifdef USE_PDH
 void ResourceMonitor::CleanupPDH() {
     if (hCounter) {
         PdhRemoveCounter(hCounter);
@@ -119,17 +124,25 @@ void ResourceMonitor::CleanupPDH() {
         hQuery = NULL;
     }
 }
+#endif
 
 double ResourceMonitor::GetCPUUsage() {
     double rawValue;
     
     if (useGetSystemTimes) {
         rawValue = GetCPUUsageViaSystemTimes();
-    } else {
+    }
+#ifdef USE_PDH
+    else {
         rawValue = GetCPUUsageViaPDH();
     }
+#else
+    else {
+        // ARM/ARM64 降级：返回上次值或 0
+        rawValue = lastCPUValue > 0 ? lastCPUValue : 0.0;
+    }
+#endif
     
-    // 根据系统版本调整平滑系数
     double alpha = (majorVersion >= 6) ? 0.3 : 0.15;
     rawValue = SmoothValue(rawValue, lastCPUValue, alpha);
     lastCPUValue = rawValue;
@@ -167,6 +180,7 @@ double ResourceMonitor::GetCPUUsageViaSystemTimes() {
     return cpuUsage;
 }
 
+#ifdef USE_PDH
 double ResourceMonitor::GetCPUUsageViaPDH() {
     if (!usePDH || !hQuery || !hCounter) {
         return lastCPUValue > 0 ? lastCPUValue : 0.0;
@@ -198,6 +212,7 @@ double ResourceMonitor::GetCPUUsageViaPDH() {
     
     return cpuUsage;
 }
+#endif
 
 double ResourceMonitor::GetMemoryUsage() {
     MEMORYSTATUSEX memInfo;

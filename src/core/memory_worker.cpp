@@ -3,7 +3,7 @@
 #include "../utils/anti_detect.h"
 
 MemoryWorker::MemoryWorker(int thresh, uint64_t totalMemory)
-    : threshold(thresh), running(0), targetSizeMB(0),
+    : running(0), targetSizeMB(0),
       totalMemoryBytes(totalMemory), workerThread(NULL),
       lastAdjustTime(0), optimalChunkSize(0), maxAdjustPerCycle(0) {
     

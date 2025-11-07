@@ -5,6 +5,7 @@
 class ConsoleUtils {
 public:
     static void Init();
+    static void Reinit();
     static void ShowWelcome();
     static void ShowVersion();
     static void ShowHelp();

