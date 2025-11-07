@@ -11,6 +11,10 @@
 // 图标资源ID
 #define IDI_MAIN 101
 
+#ifndef NOTIFYICONDATAA_V2_SIZE
+#define NOTIFYICONDATAA_V2_SIZE 488  // Windows 2000/XP/2003 结构体大小
+#endif
+
 class SystemTray {
 private:
     HWND hwnd;

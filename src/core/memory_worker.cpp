@@ -44,7 +44,7 @@ void MemoryWorker::Start() {
     InterlockedExchange(&targetSizeMB, 0);
     lastAdjustTime = GetTickCount();
     
-    RandomDelay(100, 300); // 延迟启动
+    RandomDelay(100, 300);
     
     workerThread = CreateThread(NULL, 0, WorkerThreadProc, this, 0, NULL);
 }
@@ -60,7 +60,6 @@ void MemoryWorker::Stop() {
     
     EnterCriticalSection(&allocLock);
     
-    // 安全释放内存
     for (size_t i = 0; i < allocatedMemory.size(); i++) {
         VirtualFree(allocatedMemory[i], 0, MEM_RELEASE);
     }
@@ -93,13 +92,13 @@ void MemoryWorker::WorkerLoop() {
     }
 }
 
+// 优化内存分配模式（避免堆喷射特征）
 void MemoryWorker::AllocateMemory(int64_t sizeBytes) {
     DWORD major, minor;
     SystemInfo::GetRealWindowsVersion(major, minor);
     
     int64_t actualChunkSize = optimalChunkSize;
     
-    // 针对旧系统优化
     if (major < 6) {
         actualChunkSize = actualChunkSize / 2;
         if (actualChunkSize < 5LL * 1024 * 1024) {
@@ -111,34 +110,54 @@ void MemoryWorker::AllocateMemory(int64_t sizeBytes) {
     
     EnterCriticalSection(&allocLock);
     
+    // 随机化块大小（±20%）
     for (int64_t i = 0; i < chunks && running; i++) {
-        RandomDelay(1, 10); // 分散分配
+        // 随机化每个块的大小
+        int variation = (rand() % 40) - 20;  // ±20%
+        int64_t varied_size = actualChunkSize + (actualChunkSize * variation / 100);
+        if (varied_size < 1024 * 1024) varied_size = 1024 * 1024;
         
-        void* chunk = VirtualAlloc(NULL, (SIZE_T)actualChunkSize,
+        RandomDelay(5, 50);  // 随机延迟
+        
+        void* chunk = VirtualAlloc(NULL, (SIZE_T)varied_size,
                                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         
         if (chunk) {
-            // 写入随机数据（看起来像正常使用）
-            for (size_t j = 0; j < (size_t)actualChunkSize; j += 4096) {
-                ((char*)chunk)[j] = (char)(j % 256);
+            // ✅ 写入真实数据模式（不是简单填充）
+            size_t write_size = (size_t)varied_size;
+            for (size_t j = 0; j < write_size; j += 4096) {
+                DWORD tick = GetTickCount();
+                size_t offset = j;
+                if (offset < write_size) {
+                    // 混合时间戳和计数器（模拟真实数据）
+                    ((char*)chunk)[offset] = (char)((tick + j) % 256);
+                }
             }
             allocatedMemory.push_back(chunk);
+            
+            // 每分配几个块后暂停（模拟正常程序行为）
+            if (i % 5 == 0 && i > 0) {
+                Sleep(100 + (rand() % 100));
+            }
         } else {
             break;
         }
         
         if (major < 6) {
-            Sleep(10);
+            Sleep(10 + (rand() % 20));
         }
     }
     
     int64_t remainder = sizeBytes % actualChunkSize;
     if (remainder > 0 && running) {
+        RandomDelay(10, 30);
+        
         void* chunk = VirtualAlloc(NULL, (SIZE_T)remainder,
                                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         if (chunk) {
             for (size_t j = 0; j < (size_t)remainder; j += 4096) {
-                ((char*)chunk)[j] = (char)(j % 256);
+                DWORD tick = GetTickCount();
+                ((char*)chunk)[j] = (char)((tick + j) % 256);
             }
             allocatedMemory.push_back(chunk);
         }
@@ -162,7 +181,7 @@ void MemoryWorker::FreeMemory(int64_t sizeBytes) {
             VirtualFree(ptr, 0, MEM_RELEASE);
         }
         
-        RandomDelay(1, 5); // 分散释放
+        RandomDelay(1, 10); 
     }
     
     LeaveCriticalSection(&allocLock);

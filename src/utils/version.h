@@ -4,7 +4,7 @@
 class Version {
 public:
     static const char* GetVersion() { 
-        return "1.0.2"; 
+        return "1.0.3"; 
     }
     
     static const char* GetBuildDate() { 

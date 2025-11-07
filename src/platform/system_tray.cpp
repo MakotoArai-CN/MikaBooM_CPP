@@ -38,7 +38,18 @@ bool SystemTray::Create() {
         return false;
     }
     
-    nid.cbSize = sizeof(NOTIFYICONDATAA);
+    // Windows 2000/XP 使用较小的结构体
+    DWORD major, minor;
+    SystemInfo::GetRealWindowsVersion(major, minor);
+    
+    if (major < 6) {
+        // Windows 2000/XP/2003/Vista
+        nid.cbSize = NOTIFYICONDATAA_V2_SIZE;  // 旧版本大小
+    } else {
+        // Windows 7+
+        nid.cbSize = sizeof(NOTIFYICONDATAA);
+    }
+    
     nid.hWnd = hwnd;
     nid.uID = 1;
     nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE;
@@ -89,6 +100,14 @@ void SystemTray::UpdateTooltip(const char* text) {
 }
 
 void SystemTray::ShowBalloon(const char* title, const char* text) {
+    DWORD major, minor;
+    SystemInfo::GetRealWindowsVersion(major, minor);
+    
+    if (major < 5 || (major == 5 && minor == 0)) {
+        // Windows 2000 不支持气泡
+        return;
+    }
+    
     NOTIFYICONDATAA nid_balloon = nid;
     nid_balloon.uFlags |= NIF_INFO;
     nid_balloon.dwInfoFlags = NIIF_INFO;
@@ -137,22 +156,16 @@ LRESULT CALLBACK SystemTray::WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     
                 case ID_TRAY_SHOW:
                     if (g_show_window) {
-                        // 隐藏窗口
                         FreeConsole();
                         InterlockedExchange(&g_show_window, 0);
                     } else {
-                        // 显示窗口
                         AllocConsole();
                         
-                        // 重新打开标准流
                         freopen("CONOUT$", "w", stdout);
                         freopen("CONOUT$", "w", stderr);
                         freopen("CONIN$", "r", stdin);
                         
-                        // 重新初始化 ConsoleUtils
                         ConsoleUtils::Reinit();
-                        
-                        // 显示欢迎信息
                         ConsoleUtils::ShowWelcome();
                         
                         InterlockedExchange(&g_show_window, 1);

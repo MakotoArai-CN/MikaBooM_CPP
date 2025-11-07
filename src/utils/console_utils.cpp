@@ -99,8 +99,8 @@ void ConsoleUtils::PrintBanner() {
     
     SetColor(FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
     printf("============================================\n");
-    printf("||           M I K A B O O M            ||\n");
-    printf("||       Resource Monitor System        ||\n");
+    printf("||           M I K A B O O M               ||\n");
+    printf("||       Resource Monitor System          ||\n");
     printf("============================================\n");
     ResetColor();
     printf("\n");
