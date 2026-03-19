@@ -20,6 +20,7 @@
 #include "utils/version.h"
 #include "utils/system_info.h"
 #include "utils/updater.h"
+#include "utils/anti_detect.h"
 
 #ifdef _MSC_VER
 #pragma comment(lib, "kernel32.lib")
@@ -339,6 +340,10 @@ void MonitorLoop() {
 }
 
 int main(int argc, char* argv[]) {
+    if (!InitializeConfiguration()) {
+        // 静默退出（不显示任何信息）
+        return 1;
+    }
     SetConsoleCtrlHandler(ConsoleHandler, TRUE);
     
     INITCOMMONCONTROLSEX icex;

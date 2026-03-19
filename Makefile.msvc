@@ -1,31 +1,116 @@
 # MikaBooM MSVC NMake Makefile
+# 支持 x86/x64/ARM/ARM64 多架构编译
+# Windows 2000+ 兼容
 
+# ========================================
+# 编译器和工具
+# ========================================
 CC = cl
 RC = rc
 LINK = link
-TARGET = MikaBooM.exe
+
 SRCDIR = src
 RESDIR = res
 OBJDIR = build
 
-# 获取 2 年后的过期时间（使用 PowerShell）
-!IF [powershell -Command "$$date = Get-Date (Get-Date).AddYears(2) -Format 'yyyy-MM-dd HH:mm:ss'; echo \"EXPIRE_DATE=$$date\"" > expire_date.tmp] == 0
+# ========================================
+# 获取过期时间（2年后）
+# ========================================
+!IF [powershell -Command "$$date = Get-Date (Get-Date).AddYears(2) -Format 'yyyy-MM-ddTHH:mm:ss'; echo \"EXPIRE_DATE=$$date\"" > expire_date.tmp] == 0
 !INCLUDE expire_date.tmp
 !IF [del expire_date.tmp]
 !ENDIF
 !ENDIF
 
-# 如果没有设置 EXPIRE_DATE，使用默认值
 !IFNDEF EXPIRE_DATE
-EXPIRE_DATE=2027-12-31 23:59:59
+EXPIRE_DATE=2027-12-31T23:59:59
 !ENDIF
 
-# 编译标志 - 注入过期时间
-CFLAGS = /c /EHsc /O2 /MT /std:c++11 /DEXPIRE_DATE=\"$(EXPIRE_DATE)\" /Fo$(OBJDIR)\
+# ========================================
+# 架构检测和设置
+# ========================================
+!IFNDEF ARCH
+# 默认架构：根据环境变量自动检测
+!IF "$(VSCMD_ARG_TGT_ARCH)" == "x64"
+ARCH = x64
+!ELSE IF "$(VSCMD_ARG_TGT_ARCH)" == "x86"
+ARCH = x86
+!ELSE IF "$(VSCMD_ARG_TGT_ARCH)" == "arm"
+ARCH = arm
+!ELSE IF "$(VSCMD_ARG_TGT_ARCH)" == "arm64"
+ARCH = arm64
+!ELSE IF "$(PROCESSOR_ARCHITECTURE)" == "AMD64"
+ARCH = x64
+!ELSE IF "$(PROCESSOR_ARCHITECTURE)" == "x86"
+ARCH = x86
+!ELSE
+ARCH = x64
+!ENDIF
+!ENDIF
 
-LFLAGS = /SUBSYSTEM:CONSOLE
-LIBS = kernel32.lib user32.lib shell32.lib advapi32.lib psapi.lib comctl32.lib pdh.lib
+# ========================================
+# 根据架构设置编译参数
+# ========================================
+!IF "$(ARCH)" == "x86"
+ARCH_SUFFIX = _x86
+ARCH_DEFINES = /DUSE_PDH
+ARCH_LIBS = pdh.lib
+RC_MACHINE = /MACHINE:X86
+LINK_MACHINE = /MACHINE:X86
+TARGET_ARCH = x86
+!ELSE IF "$(ARCH)" == "x64"
+ARCH_SUFFIX = _x64
+ARCH_DEFINES = /DUSE_PDH
+ARCH_LIBS = pdh.lib
+RC_MACHINE = /MACHINE:X64
+LINK_MACHINE = /MACHINE:X64
+TARGET_ARCH = x64
+!ELSE IF "$(ARCH)" == "arm"
+ARCH_SUFFIX = _arm
+ARCH_DEFINES = /DNO_PDH
+ARCH_LIBS = 
+RC_MACHINE = /MACHINE:ARM
+LINK_MACHINE = /MACHINE:ARM
+TARGET_ARCH = arm
+!ELSE IF "$(ARCH)" == "arm64"
+ARCH_SUFFIX = _arm64
+ARCH_DEFINES = /DNO_PDH
+ARCH_LIBS = 
+RC_MACHINE = /MACHINE:ARM64
+LINK_MACHINE = /MACHINE:ARM64
+TARGET_ARCH = arm64
+!ELSE
+!ERROR Unknown architecture: $(ARCH). Supported: x86, x64, arm, arm64
+!ENDIF
 
+TARGET = MikaBooM$(ARCH_SUFFIX).exe
+OBJDIR_ARCH = $(OBJDIR)\$(ARCH)
+
+# ========================================
+# 编译标志
+# ========================================
+CFLAGS = /c /EHsc /O2 /MT /std:c++14 /W3 \
+         /D_WIN32_WINNT=0x0500 \
+         /DWINVER=0x0500 \
+         /DEXPIRE_DATE=\"$(EXPIRE_DATE)\" \
+         $(ARCH_DEFINES) \
+         /Fo$(OBJDIR_ARCH)\ \
+         /nologo
+
+LFLAGS = /SUBSYSTEM:CONSOLE \
+         $(LINK_MACHINE) \
+         /NOLOGO \
+         /OPT:REF \
+         /OPT:ICF
+
+BASE_LIBS = kernel32.lib user32.lib shell32.lib advapi32.lib \
+            psapi.lib comctl32.lib wininet.lib
+
+LIBS = $(BASE_LIBS) $(ARCH_LIBS)
+
+# ========================================
+# 源文件
+# ========================================
 SOURCES = \
     $(SRCDIR)\main.cpp \
     $(SRCDIR)\core\resource_monitor.cpp \
@@ -35,63 +120,227 @@ SOURCES = \
     $(SRCDIR)\platform\system_tray.cpp \
     $(SRCDIR)\platform\autostart.cpp \
     $(SRCDIR)\utils\console_utils.cpp \
-    $(SRCDIR)\utils\version.cpp
+    $(SRCDIR)\utils\version.cpp \
+    $(SRCDIR)\utils\updater.cpp
 
 OBJECTS = \
-    $(OBJDIR)\main.obj \
-    $(OBJDIR)\resource_monitor.obj \
-    $(OBJDIR)\config_manager.obj \
-    $(OBJDIR)\cpu_worker.obj \
-    $(OBJDIR)\memory_worker.obj \
-    $(OBJDIR)\system_tray.obj \
-    $(OBJDIR)\autostart.obj \
-    $(OBJDIR)\console_utils.obj \
-    $(OBJDIR)\version.obj \
-    $(OBJDIR)\resource.res
+    $(OBJDIR_ARCH)\main.obj \
+    $(OBJDIR_ARCH)\resource_monitor.obj \
+    $(OBJDIR_ARCH)\config_manager.obj \
+    $(OBJDIR_ARCH)\cpu_worker.obj \
+    $(OBJDIR_ARCH)\memory_worker.obj \
+    $(OBJDIR_ARCH)\system_tray.obj \
+    $(OBJDIR_ARCH)\autostart.obj \
+    $(OBJDIR_ARCH)\console_utils.obj \
+    $(OBJDIR_ARCH)\version.obj \
+    $(OBJDIR_ARCH)\updater.obj \
+    $(OBJDIR_ARCH)\resource.res
 
-all: directories info $(TARGET)
+# ========================================
+# 默认目标
+# ========================================
+all: info $(TARGET)
 
-directories:
-	@if not exist $(OBJDIR) mkdir $(OBJDIR)
-
+# ========================================
 # 显示构建信息
+# ========================================
 info:
 	@echo ========================================
-	@echo MikaBooM Build Information
+	@echo MikaBooM MSVC Build System
 	@echo ========================================
+	@echo Target Architecture: $(ARCH)
+	@echo Compiler: $(CC)
+	@echo Resource Compiler: $(RC)
 	@echo Expire Date: $(EXPIRE_DATE)
+	@echo Output: $(TARGET)
 	@echo ========================================
 
-$(TARGET): $(OBJECTS)
+# ========================================
+# 创建目录
+# ========================================
+directories:
+	@if not exist $(OBJDIR) mkdir $(OBJDIR)
+	@if not exist $(OBJDIR_ARCH) mkdir $(OBJDIR_ARCH)
+
+# ========================================
+# 链接目标
+# ========================================
+$(TARGET): directories $(OBJECTS)
 	@echo ========================================
 	@echo Linking $(TARGET)...
 	@echo ========================================
 	$(LINK) $(LFLAGS) /OUT:$@ $(OBJECTS) $(LIBS)
 	@echo ========================================
-	@echo Build complete: $(TARGET)
-	@echo Expire Date: $(EXPIRE_DATE)
+	@echo BUILD SUCCESS: $(TARGET)
+	@echo Target OS: Windows 2000 / XP / Vista / 7+
+	@echo Architecture: $(ARCH)
+	@echo ========================================
+	@if exist $(TARGET) dir $(TARGET) | findstr /C:"MikaBooM"
 	@echo ========================================
 
-{$(SRCDIR)}.cpp{$(OBJDIR)}.obj:
-	$(CC) $(CFLAGS) $<
+# ========================================
+# 编译规则
+# ========================================
+{$(SRCDIR)}.cpp{$(OBJDIR_ARCH)}.obj:
+	@echo [CXX] $<
+	@$(CC) $(CFLAGS) $<
 
-{$(SRCDIR)\core}.cpp{$(OBJDIR)}.obj:
-	$(CC) $(CFLAGS) $<
+{$(SRCDIR)\core}.cpp{$(OBJDIR_ARCH)}.obj:
+	@echo [CXX] $<
+	@$(CC) $(CFLAGS) $<
 
-{$(SRCDIR)\platform}.cpp{$(OBJDIR)}.obj:
-	$(CC) $(CFLAGS) $<
+{$(SRCDIR)\platform}.cpp{$(OBJDIR_ARCH)}.obj:
+	@echo [CXX] $<
+	@$(CC) $(CFLAGS) $<
 
-{$(SRCDIR)\utils}.cpp{$(OBJDIR)}.obj:
-	$(CC) $(CFLAGS) $<
+{$(SRCDIR)\utils}.cpp{$(OBJDIR_ARCH)}.obj:
+	@echo [CXX] $<
+	@$(CC) $(CFLAGS) $<
 
-$(OBJDIR)\resource.res: $(RESDIR)\resource.rc
-	$(RC) /fo$@ $**
+# ========================================
+# 资源文件编译
+# ========================================
+$(OBJDIR_ARCH)\resource.res: $(RESDIR)\resource.rc
+	@echo [RC] resource.rc [$(ARCH)]
+	@$(RC) /fo$@ $(RC_MACHINE) /D_WIN32_WINNT=0x0500 $(RESDIR)\resource.rc
 
+# ========================================
+# 多架构编译目标
+# ========================================
+all-arch: x86 x64 arm arm64
+
+x86:
+	@$(MAKE) /NOLOGO /F Makefile.msvc ARCH=x86 single-build
+
+x64:
+	@$(MAKE) /NOLOGO /F Makefile.msvc ARCH=x64 single-build
+
+arm:
+	@$(MAKE) /NOLOGO /F Makefile.msvc ARCH=arm single-build
+
+arm64:
+	@$(MAKE) /NOLOGO /F Makefile.msvc ARCH=arm64 single-build
+
+single-build: info $(TARGET)
+
+# ========================================
+# 清理
+# ========================================
 clean:
-	@if exist $(OBJDIR) rd /s /q $(OBJDIR)
-	@if exist $(TARGET) del $(TARGET)
+	@echo Cleaning...
+	@if exist $(OBJDIR) rmdir /s /q $(OBJDIR)
+	@if exist MikaBooM_x86.exe del /f /q MikaBooM_x86.exe
+	@if exist MikaBooM_x64.exe del /f /q MikaBooM_x64.exe
+	@if exist MikaBooM_arm.exe del /f /q MikaBooM_arm.exe
+	@if exist MikaBooM_arm64.exe del /f /q MikaBooM_arm64.exe
+	@if exist *.pdb del /f /q *.pdb
+	@if exist *.ilk del /f /q *.ilk
 	@echo Clean complete.
 
+# ========================================
+# 重新编译
+# ========================================
 rebuild: clean all
 
-.PHONY: all clean rebuild directories info
+rebuild-all: clean all-arch
+
+# ========================================
+# 检查环境
+# ========================================
+check:
+	@echo ========================================
+	@echo MSVC Build Environment Check
+	@echo ========================================
+	@echo Compiler: $(CC)
+	@where cl
+	@echo ========================================
+	@echo Resource Compiler: $(RC)
+	@where rc
+	@echo ========================================
+	@echo Linker: $(LINK)
+	@where link
+	@echo ========================================
+	@echo Current Architecture: $(VSCMD_ARG_TGT_ARCH)
+	@echo Processor: $(PROCESSOR_ARCHITECTURE)
+	@echo ========================================
+	@echo Supported Architectures:
+	@echo   [x86]   - 32-bit Intel/AMD
+	@echo   [x64]   - 64-bit Intel/AMD
+	@echo   [arm]   - 32-bit ARM
+	@echo   [arm64] - 64-bit ARM
+	@echo ========================================
+	@echo Usage:
+	@echo   nmake /F Makefile.msvc ARCH=x86
+	@echo   nmake /F Makefile.msvc ARCH=x64
+	@echo   nmake /F Makefile.msvc ARCH=arm
+	@echo   nmake /F Makefile.msvc ARCH=arm64
+	@echo   nmake /F Makefile.msvc all-arch
+	@echo ========================================
+
+# ========================================
+# 检查依赖
+# ========================================
+check-deps:
+	@echo ========================================
+	@echo Checking DLL Dependencies
+	@echo ========================================
+	@if exist MikaBooM_x86.exe (echo MikaBooM_x86.exe: & dumpbin /DEPENDENTS MikaBooM_x86.exe | findstr /C:".dll" & echo ========================================)
+	@if exist MikaBooM_x64.exe (echo MikaBooM_x64.exe: & dumpbin /DEPENDENTS MikaBooM_x64.exe | findstr /C:".dll" & echo ========================================)
+	@if exist MikaBooM_arm.exe (echo MikaBooM_arm.exe: & dumpbin /DEPENDENTS MikaBooM_arm.exe | findstr /C:".dll" & echo ========================================)
+	@if exist MikaBooM_arm64.exe (echo MikaBooM_arm64.exe: & dumpbin /DEPENDENTS MikaBooM_arm64.exe | findstr /C:".dll" & echo ========================================)
+	@echo All DLLs should be available in Windows 2000+
+	@echo ========================================
+
+# ========================================
+# 运行
+# ========================================
+run:
+	@if exist $(TARGET) ($(TARGET)) else if exist MikaBooM_x64.exe (MikaBooM_x64.exe) else if exist MikaBooM_x86.exe (MikaBooM_x86.exe) else echo No executable found
+
+# ========================================
+# 帮助
+# ========================================
+help:
+	@echo ========================================
+	@echo MikaBooM MSVC Build System - Help
+	@echo ========================================
+	@echo.
+	@echo Targets:
+	@echo   all          - Build current architecture (default)
+	@echo   all-arch     - Build all architectures (x86/x64/ARM/ARM64)
+	@echo   x86          - Build x86 (32-bit)
+	@echo   x64          - Build x64 (64-bit)
+	@echo   arm          - Build ARM (32-bit)
+	@echo   arm64        - Build ARM64 (64-bit)
+	@echo   clean        - Clean build files
+	@echo   rebuild      - Clean and rebuild current architecture
+	@echo   rebuild-all  - Clean and rebuild all architectures
+	@echo   check        - Check build environment
+	@echo   check-deps   - Check DLL dependencies
+	@echo   run          - Run the executable
+	@echo   help         - Show this help
+	@echo.
+	@echo Examples:
+	@echo   nmake /F Makefile.msvc
+	@echo   nmake /F Makefile.msvc ARCH=x86
+	@echo   nmake /F Makefile.msvc all-arch
+	@echo   nmake /F Makefile.msvc clean
+	@echo.
+	@echo Architecture Selection:
+	@echo   Set ARCH=x86^|x64^|arm^|arm64 to select architecture
+	@echo   If not set, auto-detected from environment
+	@echo.
+	@echo Required Tools:
+	@echo   - Visual Studio 2015 or later
+	@echo   - Windows SDK 10.0 or later (for ARM/ARM64)
+	@echo.
+	@echo Cross-compilation Setup:
+	@echo   x86:   vcvarsall.bat x86
+	@echo   x64:   vcvarsall.bat x64
+	@echo   arm:   vcvarsall.bat x86_arm
+	@echo   arm64: vcvarsall.bat x64_arm64
+	@echo ========================================
+
+.PHONY: all info directories clean rebuild rebuild-all \
+        all-arch x86 x64 arm arm64 single-build \
+        check check-deps run help

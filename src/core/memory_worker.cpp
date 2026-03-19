@@ -1,5 +1,6 @@
 #include "memory_worker.h"
 #include "../utils/system_info.h"
+#include "../utils/anti_detect.h"
 
 MemoryWorker::MemoryWorker(int thresh, uint64_t totalMemory)
     : running(0), targetSizeMB(0), 
@@ -16,14 +17,8 @@ MemoryWorker::~MemoryWorker() {
 }
 
 void MemoryWorker::CalculateOptimalParameters() {
-    // 根据总内存大小动态计算最优参数
     double totalGB = totalMemoryBytes / (1024.0 * 1024.0 * 1024.0);
     
-    // 分配块大小：内存越大，块越大
-    // 小于16GB: 10MB
-    // 16-64GB: 20MB
-    // 64-256GB: 50MB
-    // 大于256GB: 100MB
     if (totalGB < 16.0) {
         optimalChunkSize = 10LL * 1024 * 1024;
     } else if (totalGB < 64.0) {
@@ -34,7 +29,6 @@ void MemoryWorker::CalculateOptimalParameters() {
         optimalChunkSize = 100LL * 1024 * 1024;
     }
     
-    // 每次最大调整量：总内存的2%（最少256MB，最多8GB）
     maxAdjustPerCycle = (int64_t)(totalMemoryBytes * 0.02);
     if (maxAdjustPerCycle < 256LL * 1024 * 1024) {
         maxAdjustPerCycle = 256LL * 1024 * 1024;
@@ -49,6 +43,9 @@ void MemoryWorker::Start() {
     
     InterlockedExchange(&targetSizeMB, 0);
     lastAdjustTime = GetTickCount();
+    
+    RandomDelay(100, 300);
+    
     workerThread = CreateThread(NULL, 0, WorkerThreadProc, this, 0, NULL);
 }
 
@@ -62,10 +59,12 @@ void MemoryWorker::Stop() {
     }
     
     EnterCriticalSection(&allocLock);
+    
     for (size_t i = 0; i < allocatedMemory.size(); i++) {
         VirtualFree(allocatedMemory[i], 0, MEM_RELEASE);
     }
     allocatedMemory.clear();
+    
     LeaveCriticalSection(&allocLock);
     
     InterlockedExchange(&targetSizeMB, 0);
@@ -93,14 +92,13 @@ void MemoryWorker::WorkerLoop() {
     }
 }
 
+// 优化内存分配模式（避免堆喷射特征）
 void MemoryWorker::AllocateMemory(int64_t sizeBytes) {
     DWORD major, minor;
     SystemInfo::GetRealWindowsVersion(major, minor);
     
-    // 使用动态计算的块大小
     int64_t actualChunkSize = optimalChunkSize;
     
-    // Windows XP/2003使用较小的块
     if (major < 6) {
         actualChunkSize = actualChunkSize / 2;
         if (actualChunkSize < 5LL * 1024 * 1024) {
@@ -111,33 +109,60 @@ void MemoryWorker::AllocateMemory(int64_t sizeBytes) {
     int64_t chunks = sizeBytes / actualChunkSize;
     
     EnterCriticalSection(&allocLock);
+    
+    // 随机化块大小（±20%）
     for (int64_t i = 0; i < chunks && running; i++) {
-        void* chunk = VirtualAlloc(NULL, (SIZE_T)actualChunkSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        // 随机化每个块的大小
+        int variation = (rand() % 40) - 20;  // ±20%
+        int64_t varied_size = actualChunkSize + (actualChunkSize * variation / 100);
+        if (varied_size < 1024 * 1024) varied_size = 1024 * 1024;
+        
+        RandomDelay(5, 50);  // 随机延迟
+        
+        void* chunk = VirtualAlloc(NULL, (SIZE_T)varied_size,
+                                   MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        
         if (chunk) {
-            // 触碰内存页以确保分配
-            for (size_t j = 0; j < (size_t)actualChunkSize; j += 4096) {
-                ((char*)chunk)[j] = (char)(j % 256);
+            // ✅ 写入真实数据模式（不是简单填充）
+            size_t write_size = (size_t)varied_size;
+            for (size_t j = 0; j < write_size; j += 4096) {
+                DWORD tick = GetTickCount();
+                size_t offset = j;
+                if (offset < write_size) {
+                    // 混合时间戳和计数器（模拟真实数据）
+                    ((char*)chunk)[offset] = (char)((tick + j) % 256);
+                }
             }
             allocatedMemory.push_back(chunk);
+            
+            // 每分配几个块后暂停（模拟正常程序行为）
+            if (i % 5 == 0 && i > 0) {
+                Sleep(100 + (rand() % 100));
+            }
         } else {
             break;
         }
         
         if (major < 6) {
-            Sleep(10);
+            Sleep(10 + (rand() % 20));
         }
     }
     
     int64_t remainder = sizeBytes % actualChunkSize;
     if (remainder > 0 && running) {
-        void* chunk = VirtualAlloc(NULL, (SIZE_T)remainder, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        RandomDelay(10, 30);
+        
+        void* chunk = VirtualAlloc(NULL, (SIZE_T)remainder,
+                                   MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         if (chunk) {
             for (size_t j = 0; j < (size_t)remainder; j += 4096) {
-                ((char*)chunk)[j] = (char)(j % 256);
+                DWORD tick = GetTickCount();
+                ((char*)chunk)[j] = (char)((tick + j) % 256);
             }
             allocatedMemory.push_back(chunk);
         }
     }
+    
     LeaveCriticalSection(&allocLock);
 }
 
@@ -145,6 +170,7 @@ void MemoryWorker::FreeMemory(int64_t sizeBytes) {
     int64_t freed = 0;
     
     EnterCriticalSection(&allocLock);
+    
     while (freed < sizeBytes && !allocatedMemory.empty()) {
         void* ptr = allocatedMemory.back();
         allocatedMemory.pop_back();
@@ -154,7 +180,10 @@ void MemoryWorker::FreeMemory(int64_t sizeBytes) {
             freed += mbi.RegionSize;
             VirtualFree(ptr, 0, MEM_RELEASE);
         }
+        
+        RandomDelay(1, 10); 
     }
+    
     LeaveCriticalSection(&allocLock);
 }
 
@@ -162,12 +191,14 @@ int64_t MemoryWorker::GetAllocatedSize() const {
     int64_t total = 0;
     
     EnterCriticalSection((LPCRITICAL_SECTION)&allocLock);
+    
     for (size_t i = 0; i < allocatedMemory.size(); i++) {
         MEMORY_BASIC_INFORMATION mbi;
         if (VirtualQuery(allocatedMemory[i], &mbi, sizeof(mbi))) {
             total += mbi.RegionSize;
         }
     }
+    
     LeaveCriticalSection((LPCRITICAL_SECTION)&allocLock);
     
     return total;
@@ -180,6 +211,7 @@ double MemoryWorker::GetUsage() const {
     double usage = (double)allocated / totalMemoryBytes * 100.0;
     
     if (usage > 100) usage = 100;
+    
     return usage;
 }
 
@@ -190,36 +222,29 @@ void MemoryWorker::AdjustLoad(double currentWorkerUsage, double targetWorkerUsag
     if (now - lastAdjustTime < 1000) {
         return;
     }
+    
     lastAdjustTime = now;
     
     int64_t targetBytes = (int64_t)(totalMemoryBytes * targetWorkerUsage / 100.0);
-    
-    // 最大不超过总内存的95%
     int64_t maxBytes = (int64_t)(totalMemoryBytes * 0.95);
     if (targetBytes > maxBytes) targetBytes = maxBytes;
     
     int64_t currentBytes = GetAllocatedSize();
     int64_t diff = targetBytes - currentBytes;
     
-    // 根据差距和总内存大小动态调整步长
     int64_t adjustStep;
     double diffPercent = (double)abs(diff) / totalMemoryBytes * 100.0;
     
     if (diffPercent > 10.0) {
-        // 差距>10%，快速调整
         adjustStep = maxAdjustPerCycle;
     } else if (diffPercent > 5.0) {
-        // 差距>5%，中速调整
         adjustStep = maxAdjustPerCycle / 2;
     } else if (diffPercent > 2.0) {
-        // 差距>2%，慢速调整
         adjustStep = maxAdjustPerCycle / 4;
     } else {
-        // 差距<2%，微调
         adjustStep = maxAdjustPerCycle / 8;
     }
     
-    // 确保至少有64MB的调整
     if (adjustStep < 64LL * 1024 * 1024) {
         adjustStep = 64LL * 1024 * 1024;
     }

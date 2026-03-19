@@ -2,7 +2,6 @@
 #include <windows.h>
 #include <fstream>
 #include <sstream>
-#include <algorithm>
 
 ConfigManager::ConfigManager() : enableWorker(true), checkUpdates(true) {
     SetDefaults();
@@ -21,7 +20,7 @@ void ConfigManager::SetDefaults() {
     updateInterval = 2;
     notificationEnabled = true;
     notificationCooldown = 60;
-    checkUpdates = true;  // 默认开启
+    checkUpdates = true;
 }
 
 std::string ConfigManager::GetExePath() {
