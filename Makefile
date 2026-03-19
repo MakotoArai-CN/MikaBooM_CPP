@@ -19,15 +19,14 @@ ifeq ($(EXPIRE_DATE),)
     EXPIRE_DATE := $(shell date +'$(EXPIRE_YEAR)-%m-%dT%H:%M:%S')
 endif
 
-# 编译标志 - 基础静态链接 + 注入过期时间
+# 编译标志 - 注入过期时间与目标平台
 # 注意：使用单引号包裹宏定义值，避免空格问题
 CXXFLAGS = -std=c++11 -Wall -O2 \
-           -static-libgcc -static-libstdc++ \
            -D_WIN32_WINNT=0x0500 \
            -DWINVER=0x0500 \
            -DEXPIRE_DATE=\"$(EXPIRE_DATE)\"
 
-# 链接标志 - 静态链接 C++ 运行库，确保包含 PDH
+# 链接标志 - 静态链接运行库，确保包含 PDH
 LDFLAGS = -static-libgcc -static-libstdc++ \
           -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic \
           -lkernel32 -luser32 -lshell32 -ladvapi32 \

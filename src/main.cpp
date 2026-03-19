@@ -386,8 +386,8 @@ int main(int argc, char* argv[]) {
     g_monitor = new ResourceMonitor();
     
     // 获取实际系统内存
-    MEMORYSTATUSEX memInfo = g_monitor->GetMemoryInfo();
-    uint64_t totalMemory = memInfo.ullTotalPhys;
+    MemoryStatusSnapshot memInfo = g_monitor->GetMemoryInfo();
+    uint64_t totalMemory = memInfo.totalPhys;
     
     if (g_config->GetEnableWorker() && Version::IsValid()) {
         g_cpu_worker = new CPUWorker(g_config->GetCPUThreshold());

@@ -5,7 +5,6 @@
 
 class MemoryWorker {
 private:
-    int threshold;
     volatile LONG running;
     std::vector<void*> allocatedMemory;
     volatile LONG targetSizeMB;

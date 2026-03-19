@@ -1,6 +1,7 @@
 #include "console_utils.h"
 #include "version.h"
 #include "system_info.h"
+#include "../platform/system_compat.h"
 #include <cstdio>
 #include <cstdarg>
 #include <ctime>
@@ -80,9 +81,8 @@ void ConsoleUtils::PrintSystemInfo() {
     SYSTEM_INFO sysInfo;
     ::GetSystemInfo(&sysInfo);
     
-    MEMORYSTATUSEX memInfo;
-    memInfo.dwLength = sizeof(MEMORYSTATUSEX);
-    GlobalMemoryStatusEx(&memInfo);
+    MemoryStatusSnapshot memInfo;
+    const bool hasMemoryInfo = SystemCompat::QueryMemoryStatus(memInfo);
     
     SetColor(FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
     
@@ -95,7 +95,11 @@ void ConsoleUtils::PrintSystemInfo() {
     if (useUTF8) {
         printf(">> 操作系统: %s\n", SystemInfo::GetOSName());
         printf(">> CPU核心数: %lu\n", sysInfo.dwNumberOfProcessors);  // 修改：%d -> %lu
-        printf(">> 物理内存: %.2f GB\n", memInfo.ullTotalPhys / (1024.0 * 1024.0 * 1024.0));
+        if (hasMemoryInfo) {
+            printf(">> 物理内存: %.2f GB\n", memInfo.totalPhys / (1024.0 * 1024.0 * 1024.0));
+        } else {
+            printf(">> 物理内存: 未知\n");
+        }
         printf("\n");
         printf(">> 版本: %s\n", Version::GetVersion());
         printf(">> 构建时间: %s\n", Version::GetBuildDate());
@@ -104,7 +108,11 @@ void ConsoleUtils::PrintSystemInfo() {
     } else {
         printf("OS: %s\n", SystemInfo::GetOSName());
         printf("CPU Cores: %lu\n", sysInfo.dwNumberOfProcessors);  // 修改：%d -> %lu
-        printf("Physical Memory: %.2f GB\n", memInfo.ullTotalPhys / (1024.0 * 1024.0 * 1024.0));
+        if (hasMemoryInfo) {
+            printf("Physical Memory: %.2f GB\n", memInfo.totalPhys / (1024.0 * 1024.0 * 1024.0));
+        } else {
+            printf("Physical Memory: Unknown\n");
+        }
         printf("\n");
         printf("Version: %s\n", Version::GetVersion());
         printf("Build Date: %s\n", Version::GetBuildDate());

@@ -14,7 +14,7 @@ Windows系统资源监控与调整工具 - C++版本，让你的Windows发光发
 
 ## 特性
 
-- ✅ 支持 Windows 2000 到 Windows 11 全系列
+- ✅ 支持 Windows 2000 到 Windows 11 全系列（需使用对应工具链构建）
 - ✅ 单文件可执行程序，无需依赖
 - ✅ CPU 和内存使用率实时监控
 - ✅ 智能负载调整
@@ -30,7 +30,14 @@ Windows系统资源监控与调整工具 - C++版本，让你的Windows发光发
 
 ### 使用 MinGW
 
-> 如果需要支持Windows2000/2003/XP等旧系统，请使用MinGW 4.9.2等32位旧版本编译。
+> 如果需要支持 Windows 2000/2003/XP 等旧系统，请使用 32 位旧工具链编译，例如 MinGW 4.9.2。
+>
+> 旧系统不需要按 `Windows 2000`、`XP`、`2003` 分别单独编译，通常只需要维护两份构建：
+>
+> - `legacy-x86`：面向 Windows 2000 到 Windows 11 的 32 位兼容构建
+> - `modern-x64`：面向现代 64 位 Windows 的构建
+>
+> 当前仓库代码已移除 `GlobalMemoryStatusEx` 的静态导入，Win2000 会自动回退到 `GlobalMemoryStatus`。但如果你使用的是 `x86_64 + UCRT` 一类现代工具链，生成的程序仍然只适合现代 Windows。
 
 ```bash
 make
@@ -95,6 +102,8 @@ cooldown=60
 
 ## 兼容性
 
+> 注意：下面的 Windows 兼容性建立在 `legacy-x86` 构建之上；现代 `x64/UCRT` 构建不代表能直接运行在 Windows 2000/XP 上。
+
 | Windows 版本  | 支持状态 |
 | ------------- | -------- |
 | Windows 2000  | ✅        |
@@ -108,6 +117,8 @@ cooldown=60
 | Windows 8/8.1 | ✅        |
 | Windows 10    | ✅        |
 | Windows 11    | ✅        |
+
+Linux: 目前尚未完成正式支持，现阶段仅开始抽离少量平台兼容接口，托盘、自启动、控制台和线程模型仍是 Windows 实现。
 
 ## 作者
 

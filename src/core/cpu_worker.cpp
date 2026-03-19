@@ -6,7 +6,8 @@
 #endif
 
 CPUWorker::CPUWorker(int thresh)
-    : threshold(thresh), running(0), intensity(30), lastAdjustTime(0) {
+    : running(0), intensity(30), lastAdjustTime(0) {
+    (void)thresh;
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
     numWorkers = sysInfo.dwNumberOfProcessors;

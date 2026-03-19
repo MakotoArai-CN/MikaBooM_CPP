@@ -4,7 +4,7 @@
 ResourceMonitor::ResourceMonitor()
     : pGetSystemTimes(NULL), useGetSystemTimes(false), hQuery(NULL), hCounter(NULL),
       usePDH(false), lastPdhCollectTime(0), majorVersion(5), minorVersion(0),
-      lastCPUValue(-1.0), lastMemValue(-1.0), stableCPUCount(0), stableMemCount(0) {
+      lastCPUValue(-1.0), lastMemValue(-1.0) {
     
     SYSTEM_INFO sysInfo;
     ::GetSystemInfo(&sysInfo);
@@ -191,12 +191,11 @@ double ResourceMonitor::GetCPUUsageViaPDH() {
 }
 
 double ResourceMonitor::GetMemoryUsage() {
-    MEMORYSTATUSEX memInfo;
-    memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+    MemoryStatusSnapshot memInfo;
     
-    if (GlobalMemoryStatusEx(&memInfo)) {
-        DWORDLONG totalPhysMem = memInfo.ullTotalPhys;
-        DWORDLONG physMemUsed = totalPhysMem - memInfo.ullAvailPhys;
+    if (SystemCompat::QueryMemoryStatus(memInfo) && memInfo.totalPhys > 0) {
+        uint64_t totalPhysMem = memInfo.totalPhys;
+        uint64_t physMemUsed = totalPhysMem - memInfo.availPhys;
         
         double rawValue = (double)physMemUsed / totalPhysMem * 100.0;
         
@@ -210,10 +209,9 @@ double ResourceMonitor::GetMemoryUsage() {
     return lastMemValue > 0 ? lastMemValue : 0.0;
 }
 
-MEMORYSTATUSEX ResourceMonitor::GetMemoryInfo() {
-    MEMORYSTATUSEX memInfo;
-    memInfo.dwLength = sizeof(MEMORYSTATUSEX);
-    GlobalMemoryStatusEx(&memInfo);
+MemoryStatusSnapshot ResourceMonitor::GetMemoryInfo() {
+    MemoryStatusSnapshot memInfo;
+    SystemCompat::QueryMemoryStatus(memInfo);
     return memInfo;
 }
 

@@ -3,6 +3,7 @@
 #include <psapi.h>
 #include <pdh.h>
 #include <string>
+#include "../platform/system_compat.h"
 
 class ResourceMonitor {
 private:
@@ -27,8 +28,6 @@ private:
     // 平滑滤波相关
     double lastCPUValue;
     double lastMemValue;
-    int stableCPUCount;
-    int stableMemCount;
     
     // 辅助函数
     double SmoothValue(double newValue, double lastValue, double alpha = 0.3);
@@ -39,7 +38,7 @@ public:
     
     double GetCPUUsage();
     double GetMemoryUsage();
-    MEMORYSTATUSEX GetMemoryInfo();
+    MemoryStatusSnapshot GetMemoryInfo();
     SYSTEM_INFO GetSysInfo();
 
 private:
