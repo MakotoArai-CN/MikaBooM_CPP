@@ -209,6 +209,21 @@ arm64:
 single-build: info $(TARGET)
 
 # ========================================
+# Legacy 构建目标（Windows 2000/XP 兼容包）
+# ========================================
+legacy-x86:
+	@$(MAKE) /NOLOGO /F Makefile.msvc ARCH=x86 single-build
+	@copy /Y MikaBooM_x86.exe MikaBooM_legacy_x86.exe >nul
+	@echo Legacy x86 build: MikaBooM_legacy_x86.exe
+
+legacy-x64:
+	@$(MAKE) /NOLOGO /F Makefile.msvc ARCH=x64 single-build
+	@copy /Y MikaBooM_x64.exe MikaBooM_legacy_x64.exe >nul
+	@echo Legacy x64 build: MikaBooM_legacy_x64.exe
+
+all-legacy: legacy-x86 legacy-x64
+
+# ========================================
 # 清理
 # ========================================
 clean:
@@ -218,6 +233,8 @@ clean:
 	@if exist MikaBooM_x64.exe del /f /q MikaBooM_x64.exe
 	@if exist MikaBooM_arm.exe del /f /q MikaBooM_arm.exe
 	@if exist MikaBooM_arm64.exe del /f /q MikaBooM_arm64.exe
+	@if exist MikaBooM_legacy_x86.exe del /f /q MikaBooM_legacy_x86.exe
+	@if exist MikaBooM_legacy_x64.exe del /f /q MikaBooM_legacy_x64.exe
 	@if exist *.pdb del /f /q *.pdb
 	@if exist *.ilk del /f /q *.ilk
 	@echo Clean complete.
@@ -273,6 +290,8 @@ check-deps:
 	@if exist MikaBooM_x64.exe (echo MikaBooM_x64.exe: & dumpbin /DEPENDENTS MikaBooM_x64.exe | findstr /C:".dll" & echo ========================================)
 	@if exist MikaBooM_arm.exe (echo MikaBooM_arm.exe: & dumpbin /DEPENDENTS MikaBooM_arm.exe | findstr /C:".dll" & echo ========================================)
 	@if exist MikaBooM_arm64.exe (echo MikaBooM_arm64.exe: & dumpbin /DEPENDENTS MikaBooM_arm64.exe | findstr /C:".dll" & echo ========================================)
+	@if exist MikaBooM_legacy_x86.exe (echo MikaBooM_legacy_x86.exe: & dumpbin /DEPENDENTS MikaBooM_legacy_x86.exe | findstr /C:".dll" & echo ========================================)
+	@if exist MikaBooM_legacy_x64.exe (echo MikaBooM_legacy_x64.exe: & dumpbin /DEPENDENTS MikaBooM_legacy_x64.exe | findstr /C:".dll" & echo ========================================)
 	@echo All DLLs should be available in Windows 2000+
 	@echo ========================================
 
@@ -297,6 +316,9 @@ help:
 	@echo   x64          - Build x64 (64-bit)
 	@echo   arm          - Build ARM (32-bit)
 	@echo   arm64        - Build ARM64 (64-bit)
+	@echo   legacy-x86   - Build legacy x86 (Windows 2000/XP compatible)
+	@echo   legacy-x64   - Build legacy x64 (Windows XP x64/2003 compatible)
+	@echo   all-legacy   - Build all legacy packages
 	@echo   clean        - Clean build files
 	@echo   rebuild      - Clean and rebuild current architecture
 	@echo   rebuild-all  - Clean and rebuild all architectures
@@ -309,6 +331,7 @@ help:
 	@echo   nmake /F Makefile.msvc
 	@echo   nmake /F Makefile.msvc ARCH=x86
 	@echo   nmake /F Makefile.msvc all-arch
+	@echo   nmake /F Makefile.msvc all-legacy
 	@echo   nmake /F Makefile.msvc clean
 	@echo.
 	@echo Architecture Selection:
@@ -328,4 +351,5 @@ help:
 
 .PHONY: all info directories clean rebuild rebuild-all \
         all-arch x86 x64 arm arm64 single-build \
+        all-legacy legacy-x86 legacy-x64 \
         check check-deps run help

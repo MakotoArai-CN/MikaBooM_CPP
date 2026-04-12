@@ -12,21 +12,6 @@ on:
         required: false
         default: false
         type: boolean
-      include_arm:
-        description: "Run ARM self-hosted lane and publish MikaBooM_arm.exe if available"
-        required: false
-        default: false
-        type: boolean
-      include_arm64:
-        description: "Run ARM64 self-hosted lane and publish MikaBooM_arm64.exe if available"
-        required: false
-        default: false
-        type: boolean
-      include_legacy:
-        description: "Run legacy compatibility lane on self-hosted runner if available"
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: write
@@ -86,7 +71,7 @@ jobs:
           test "$FILE_STR" = "$EXPECTED_STR"
           test "$PROD_STR" = "$EXPECTED_STR"
 
-  build-hosted-modern:
+  build-all:
     needs: [get-version, verify-version]
     runs-on: windows-latest
     strategy:
@@ -97,6 +82,10 @@ jobs:
             msvc_arch: x86
           - arch: x64
             msvc_arch: x64
+          - arch: arm
+            msvc_arch: amd64_arm
+          - arch: arm64
+            msvc_arch: amd64_arm64
     steps:
       - uses: actions/checkout@v4
 
@@ -120,10 +109,19 @@ jobs:
             MikaBooM_${{ matrix.arch }}.exe
           if-no-files-found: error
 
-  build-arm:
+  build-legacy:
     needs: [get-version, verify-version]
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_arm }}
-    runs-on: [self-hosted, windows, arm-build]
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86
+            msvc_arch: x86
+            suffix: legacy_x86
+          - arch: x64
+            msvc_arch: x64
+            suffix: legacy_x64
     steps:
       - uses: actions/checkout@v4
 
@@ -133,77 +131,29 @@ jobs:
       - name: Set up MSVC developer command prompt
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: amd64_arm
+          arch: ${{ matrix.msvc_arch }}
 
-      - name: Build ARM executable
-        shell: cmd
-        run: nmake /NOLOGO /F Makefile.msvc ARCH=arm single-build
-
-      - name: Upload ARM artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: MikaBooM-arm
-          path: |
-            MikaBooM_arm.exe
-          if-no-files-found: error
-
-  build-arm64:
-    needs: [get-version, verify-version]
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_arm64 }}
-    runs-on: [self-hosted, windows, arm64-build]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Locate Visual Studio
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Set up MSVC developer command prompt
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: amd64_arm64
-
-      - name: Build ARM64 executable
-        shell: cmd
-        run: nmake /NOLOGO /F Makefile.msvc ARCH=arm64 single-build
-
-      - name: Upload ARM64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: MikaBooM-arm64
-          path: |
-            MikaBooM_arm64.exe
-          if-no-files-found: error
-
-  legacy-lane:
-    needs: [get-version, verify-version]
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_legacy }}
-    runs-on: [self-hosted, windows, legacy-x86]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build legacy x86 package
+      - name: Build legacy executable
         shell: cmd
         run: |
-          nmake /NOLOGO /F Makefile.msvc ARCH=x86 single-build
-          copy /Y MikaBooM_x86.exe MikaBooM_legacy_x86.exe
+          nmake /NOLOGO /F Makefile.msvc ARCH=${{ matrix.arch }} single-build
+          copy /Y MikaBooM_${{ matrix.arch }}.exe MikaBooM_${{ matrix.suffix }}.exe
 
       - name: Upload legacy artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MikaBooM-legacy-x86
+          name: MikaBooM-${{ matrix.suffix }}
           path: |
-            MikaBooM_legacy_x86.exe
+            MikaBooM_${{ matrix.suffix }}.exe
           if-no-files-found: error
 
   publish:
-    needs: [get-version, build-hosted-modern, build-arm, build-arm64, legacy-lane]
+    needs: [get-version, build-all, build-legacy]
     if: |
       always() &&
       needs.get-version.result == 'success' &&
-      needs.build-hosted-modern.result == 'success' &&
-      (needs.build-arm.result == 'success' || needs.build-arm.result == 'skipped') &&
-      (needs.build-arm64.result == 'success' || needs.build-arm64.result == 'skipped') &&
-      (needs.legacy-lane.result == 'success' || needs.legacy-lane.result == 'skipped') &&
+      needs.build-all.result == 'success' &&
+      needs.build-legacy.result == 'success' &&
       ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
       (github.event_name == 'push' && needs.get-version.outputs.tag_exists == 'false'))
     runs-on: ubuntu-latest
@@ -248,12 +198,22 @@ jobs:
             echo
             echo '## Packages'
             echo
+            echo '| File | Architecture | Target |'
+            echo '| --- | --- | --- |'
             for file in "${EXES[@]}"; do
               base=$(basename "$file")
-              echo "- \`$base\`"
+              case "$base" in
+                *legacy_x86*) echo "| \`$base\` | x86 | Windows 2000/XP+ (legacy) |" ;;
+                *legacy_x64*) echo "| \`$base\` | x64 | Windows XP x64/2003+ (legacy) |" ;;
+                *_x86*)       echo "| \`$base\` | x86 | Windows Vista+ |" ;;
+                *_x64*)       echo "| \`$base\` | x64 | Windows Vista+ |" ;;
+                *_arm.*)      echo "| \`$base\` | ARM | Windows RT / 10 ARM |" ;;
+                *_arm64*)     echo "| \`$base\` | ARM64 | Windows 10/11 ARM64 |" ;;
+                *)            echo "| \`$base\` | - | - |" ;;
+              esac
             done
             echo
-            echo '> Windows 2000/XP compatibility must be validated on the legacy self-hosted lane. Hosted runners only verify hosted-capable builds.'
+            echo '> **Legacy builds** (`legacy_x86`, `legacy_x64`) target Windows 2000/XP and use the same `_WIN32_WINNT=0x0500` flags. Modern builds (`x86`, `x64`, `arm`, `arm64`) target Windows Vista+.'
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 

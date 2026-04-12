@@ -174,6 +174,8 @@ clean:
 	@if exist MikaBooM_x64.exe del /f /q MikaBooM_x64.exe
 	@if exist MikaBooM_arm.exe del /f /q MikaBooM_arm.exe
 	@if exist MikaBooM_arm64.exe del /f /q MikaBooM_arm64.exe
+	@if exist MikaBooM_legacy_x86.exe del /f /q MikaBooM_legacy_x86.exe
+	@if exist MikaBooM_legacy_x64.exe del /f /q MikaBooM_legacy_x64.exe
 	@echo Clean complete.
 
 rebuild: clean auto-build

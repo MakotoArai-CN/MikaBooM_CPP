@@ -25,6 +25,9 @@ Prefer this path for explicit architecture selection; [Makefile.msvc](Makefile.m
 - `nmake /F Makefile.msvc check`
 - `nmake /F Makefile.msvc check-deps`
 - `nmake /F Makefile.msvc run`
+- `nmake /F Makefile.msvc legacy-x86` — build legacy x86 (Windows 2000/XP compatible)
+- `nmake /F Makefile.msvc legacy-x64` — build legacy x64 (Windows XP x64/2003 compatible)
+- `nmake /F Makefile.msvc all-legacy` — build all legacy packages
 
 ### Runtime CLI
 Use a built executable directly, e.g. `MikaBooM_x64.exe`.

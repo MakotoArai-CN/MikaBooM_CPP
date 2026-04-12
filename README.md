@@ -65,6 +65,8 @@ make rebuild
 - `MikaBooM_x64.exe` - 64 位 x64 版本
 - `MikaBooM_arm.exe` - ARM 32 位版本
 - `MikaBooM_arm64.exe` - ARM 64 位版本
+- `MikaBooM_legacy_x86.exe` - 32 位 x86 旧系统兼容版（Windows 2000/XP）
+- `MikaBooM_legacy_x64.exe` - 64 位 x64 旧系统兼容版（Windows XP x64/2003）
 
 ## 使用
 
@@ -136,15 +138,15 @@ refresh_stride_kb=4
 ## 自动发布
 
 - 新增 GitHub Actions 工作流 `.github/workflows/Release.yml`
-- GitHub Hosted Runner 默认构建现代 Windows `x86/x64`
-- `arm` 与 `arm64` 通过独立 self-hosted runner 通道构建并发布
-- 可选 `legacy-x86` 自托管发布通道用于 Windows 2000/XP 兼容包
+- GitHub Hosted Runner 自动构建全部架构：`x86`、`x64`、`ARM`、`ARM64`
+- 同时构建 `legacy_x86` 和 `legacy_x64` 旧系统兼容包（Windows 2000/XP）
+- 所有构建均在 `windows-latest` 上通过 MSVC 交叉编译完成，无需 self-hosted runner
 - Release 仅发布实际构建成功的 `.exe` 产物，不上传 README 等说明文件
 - 发布版本以 `src/utils/version.h` 为准，并校验 `res/resource.rc` 是否同步
 
 ## 兼容性
 
-> 注意：下面的 Windows 兼容性建立在 `legacy-x86` 构建之上；现代 `x64/UCRT` 构建不代表能直接运行在 Windows 2000/XP 上。
+> 注意：下面的 Windows 兼容性建立在 `legacy_x86` / `legacy_x64` 构建之上；现代 `x64/UCRT` 构建不代表能直接运行在 Windows 2000/XP 上。
 
 | Windows 版本 | 支持状态 |
 | --- | --- |

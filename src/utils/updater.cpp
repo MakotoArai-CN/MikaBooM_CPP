@@ -37,7 +37,8 @@ std::string Updater::GetPreferredAssetName() const {
     DWORD major = 0, minor = 0;
     SystemInfo::GetRealWindowsVersion(major, minor);
     if (major < 6) {
-        return "MikaBooM_legacy_x86.exe";
+        // Pre-Vista: use legacy build for old OS compatibility
+        return std::string("MikaBooM_legacy_") + arch + ".exe";
     }
     return std::string("MikaBooM_") + arch + ".exe";
 }
@@ -46,7 +47,9 @@ std::string Updater::GetLegacyAssetName() const {
     DWORD major = 0, minor = 0;
     SystemInfo::GetRealWindowsVersion(major, minor);
     if (major < 6) {
-        return "MikaBooM_x86.exe";
+        // Pre-Vista: try architecture-specific legacy build first
+        std::string arch = Version::GetArch();
+        return std::string("MikaBooM_legacy_") + arch + ".exe";
     }
     return "MikaBooM.exe";
 }
