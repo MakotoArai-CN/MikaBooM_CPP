@@ -169,7 +169,7 @@ refresh_stride_kb=4
 
 ## Changelog
 
-- Version 1.0.3: 修复控制台显示 BUG
+- Version 1.0.4: 修复控制台显示 BUG
   - 修复托盘图标隐藏/显示窗口问题
   - 优化控制台初始化逻辑
   - 改用 llvm-mingw 编译
