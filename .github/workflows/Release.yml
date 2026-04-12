@@ -12,6 +12,16 @@ on:
         required: false
         default: false
         type: boolean
+      include_arm:
+        description: "Run ARM self-hosted lane and publish MikaBooM_arm.exe if available"
+        required: false
+        default: false
+        type: boolean
+      include_arm64:
+        description: "Run ARM64 self-hosted lane and publish MikaBooM_arm64.exe if available"
+        required: false
+        default: false
+        type: boolean
       include_legacy:
         description: "Run legacy compatibility lane on self-hosted runner if available"
         required: false
@@ -76,13 +86,17 @@ jobs:
           test "$FILE_STR" = "$EXPECTED_STR"
           test "$PROD_STR" = "$EXPECTED_STR"
 
-  build-modern:
+  build-hosted-modern:
     needs: [get-version, verify-version]
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86, x64, arm, arm64]
+        include:
+          - arch: x86
+            msvc_arch: x86
+          - arch: x64
+            msvc_arch: x64
     steps:
       - uses: actions/checkout@v4
 
@@ -90,34 +104,15 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Set up MSVC developer command prompt
-        if: ${{ matrix.arch != 'arm' && matrix.arch != 'arm64' }}
         uses: ilammy/msvc-dev-cmd@v1
         with:
-          arch: ${{ matrix.arch }}
-
-      - name: Skip unsupported hosted ARM32 lane
-        if: ${{ matrix.arch == 'arm' }}
-        shell: bash
-        run: |
-          echo "ARM32 MSVC toolchain is not installed on this hosted runner."
-          echo "Use the legacy/self-hosted lane for ARM32 validation if needed."
-          exit 0
-
-      - name: Skip unsupported hosted ARM64 lane
-        if: ${{ matrix.arch == 'arm64' }}
-        shell: bash
-        run: |
-          echo "ARM64 hosted builds currently link x64 objects in this local/hosted environment."
-          echo "Use a dedicated ARM64-capable runner or toolchain lane for verified ARM64 artifacts."
-          exit 0
+          arch: ${{ matrix.msvc_arch }}
 
       - name: Build executable
-        if: ${{ matrix.arch != 'arm' && matrix.arch != 'arm64' }}
         shell: cmd
         run: nmake /NOLOGO /F Makefile.msvc ARCH=${{ matrix.arch }} single-build
 
       - name: Upload build artifact
-        if: ${{ matrix.arch != 'arm' && matrix.arch != 'arm64' }}
         uses: actions/upload-artifact@v4
         with:
           name: MikaBooM-${{ matrix.arch }}
@@ -125,14 +120,59 @@ jobs:
             MikaBooM_${{ matrix.arch }}.exe
           if-no-files-found: error
 
-      - name: Upload ARM32 guidance
-        if: ${{ matrix.arch == 'arm' }}
+  build-arm:
+    needs: [get-version, verify-version]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_arm }}
+    runs-on: [self-hosted, windows, arm-build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate Visual Studio
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Set up MSVC developer command prompt
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64_arm
+
+      - name: Build ARM executable
+        shell: cmd
+        run: nmake /NOLOGO /F Makefile.msvc ARCH=arm single-build
+
+      - name: Upload ARM artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MikaBooM-arm-guidance
-          path: README.md
+          name: MikaBooM-arm
+          path: |
+            MikaBooM_arm.exe
           if-no-files-found: error
 
+  build-arm64:
+    needs: [get-version, verify-version]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_arm64 }}
+    runs-on: [self-hosted, windows, arm64-build]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate Visual Studio
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Set up MSVC developer command prompt
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64_arm64
+
+      - name: Build ARM64 executable
+        shell: cmd
+        run: nmake /NOLOGO /F Makefile.msvc ARCH=arm64 single-build
+
+      - name: Upload ARM64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MikaBooM-arm64
+          path: |
+            MikaBooM_arm64.exe
+          if-no-files-found: error
 
   legacy-lane:
     needs: [get-version, verify-version]
@@ -156,11 +196,13 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [get-version, build-modern, legacy-lane]
+    needs: [get-version, build-hosted-modern, build-arm, build-arm64, legacy-lane]
     if: |
       always() &&
       needs.get-version.result == 'success' &&
-      needs.build-modern.result == 'success' &&
+      needs.build-hosted-modern.result == 'success' &&
+      (needs.build-arm.result == 'success' || needs.build-arm.result == 'skipped') &&
+      (needs.build-arm64.result == 'success' || needs.build-arm64.result == 'skipped') &&
       (needs.legacy-lane.result == 'success' || needs.legacy-lane.result == 'skipped') &&
       ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
       (github.event_name == 'push' && needs.get-version.outputs.tag_exists == 'false'))
@@ -176,13 +218,6 @@ jobs:
           path: release
           merge-multiple: true
 
-      - name: Download legacy artifact if requested
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_legacy }}
-        uses: actions/download-artifact@v4
-        with:
-          name: MikaBooM-legacy-x86
-          path: release
-
       - name: List release files
         shell: bash
         run: ls -lah release
@@ -191,12 +226,18 @@ jobs:
         id: notes
         shell: bash
         run: |
-          V="${{ needs.get-version.outputs.version }}"
           PREV=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -z "$PREV" ]; then
             COMMITS=$(git log --oneline --pretty=format:"- %s (%h)" | head -50)
           else
             COMMITS=$(git log ${PREV}..HEAD --oneline --pretty=format:"- %s (%h)")
+          fi
+
+          shopt -s nullglob
+          EXES=(release/*.exe)
+          if [ ${#EXES[@]} -eq 0 ]; then
+            echo "No executable assets found in release/" >&2
+            exit 1
           fi
 
           {
@@ -207,13 +248,12 @@ jobs:
             echo
             echo '## Packages'
             echo
-            echo '- `MikaBooM_x86.exe` — modern x86 build'
-            echo '- `MikaBooM_x64.exe` — modern x64 build'
-            echo '- `MikaBooM_arm.exe` — modern ARM build'
-            echo '- `MikaBooM_arm64.exe` — modern ARM64 build'
-            echo '- `MikaBooM_legacy_x86.exe` — optional legacy Windows 2000/XP compatibility build when self-hosted runner is enabled'
+            for file in "${EXES[@]}"; do
+              base=$(basename "$file")
+              echo "- \`$base\`"
+            done
             echo
-            echo '> Windows 2000/XP compatibility must be validated on the legacy lane. Hosted runners only verify modern Windows builds.'
+            echo '> Windows 2000/XP compatibility must be validated on the legacy self-hosted lane. Hosted runners only verify hosted-capable builds.'
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
@@ -223,5 +263,5 @@ jobs:
           tag_name: ${{ needs.get-version.outputs.version }}
           name: Release ${{ needs.get-version.outputs.version }}
           body: ${{ steps.notes.outputs.BODY }}
-          files: release/*
+          files: release/*.exe
           make_latest: true

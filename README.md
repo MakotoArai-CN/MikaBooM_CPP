@@ -136,9 +136,10 @@ refresh_stride_kb=4
 ## 自动发布
 
 - 新增 GitHub Actions 工作流 `.github/workflows/Release.yml`
-- 默认自动构建现代 Windows `x86/x64`
-- `arm` 与 `arm64` 预留为独立兼容通道，建议在专用自托管/交叉工具链环境中验证后发布
+- GitHub Hosted Runner 默认构建现代 Windows `x86/x64`
+- `arm` 与 `arm64` 通过独立 self-hosted runner 通道构建并发布
 - 可选 `legacy-x86` 自托管发布通道用于 Windows 2000/XP 兼容包
+- Release 仅发布实际构建成功的 `.exe` 产物，不上传 README 等说明文件
 - 发布版本以 `src/utils/version.h` 为准，并校验 `res/resource.rc` 是否同步
 
 ## 兼容性
