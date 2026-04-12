@@ -1,5 +1,6 @@
 #include "resource_monitor.h"
 #include "../utils/anti_detect.h"
+#include "../utils/system_info.h"
 #include <iostream>
 
 ResourceMonitor::ResourceMonitor()
@@ -29,36 +30,8 @@ ResourceMonitor::~ResourceMonitor() {
 }
 
 void ResourceMonitor::DetectWindowsVersion() {
-    OSVERSIONINFOEXA osvi;
-    ZeroMemory(&osvi, sizeof(OSVERSIONINFOEXA));
-    osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEXA);
-    
-    typedef LONG (WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOEXW);
-    DynamicAPI ntdllLoader;
-    
-    const char encDll[] = {0x6f, 0x74, 0x67, 0x6e, 0x69, 0x2a, 0x63, 0x6a, 0x65};
-    std::string dllName = StringCrypt::Decrypt(encDll, 9, 0x01);
-    
-    RtlGetVersionPtr pRtlGetVersion = ntdllLoader.GetFunction<RtlGetVersionPtr>(
-        dllName.c_str(), "RtlGetVersion"
-    );
-    
-    if (pRtlGetVersion) {
-        OSVERSIONINFOEXW osviW;
-        ZeroMemory(&osviW, sizeof(osviW));
-        osviW.dwOSVersionInfoSize = sizeof(osviW);
-        
-        if (pRtlGetVersion((PRTL_OSVERSIONINFOEXW)&osviW) == 0) {
-            majorVersion = osviW.dwMajorVersion;
-            minorVersion = osviW.dwMinorVersion;
-            return;
-        }
-    }
-    
-    if (GetVersionExA((LPOSVERSIONINFOA)&osvi)) {
-        majorVersion = osvi.dwMajorVersion;
-        minorVersion = osvi.dwMinorVersion;
-    }
+    DWORD buildVersion = 0;
+    SystemInfo::GetRealWindowsVersion(majorVersion, minorVersion, &buildVersion);
 }
 
 double ResourceMonitor::SmoothValue(double newValue, double lastValue, double alpha) {

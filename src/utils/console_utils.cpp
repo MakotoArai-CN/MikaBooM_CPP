@@ -14,15 +14,15 @@ bool ConsoleUtils::useUTF8 = false;
 
 void ConsoleUtils::Init() {
     if (isInitialized) return;
-    
+
     hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
     if (GetConsoleScreenBufferInfo(hConsole, &consoleInfo)) {
         originalAttributes = consoleInfo.wAttributes;
     }
-    
+
     useUTF8 = IsWindows7OrLater();
-    
+
     if (useUTF8) {
         SetConsoleCP(65001);
         SetConsoleOutputCP(65001);
@@ -30,20 +30,18 @@ void ConsoleUtils::Init() {
         SetConsoleCP(437);
         SetConsoleOutputCP(437);
     }
-    
+
     Version::InitAsciiArt(useUTF8);
-    
+
     isInitialized = true;
 }
 
 void ConsoleUtils::Reinit() {
-    // 强制重新初始化（用于控制台重新分配后）
     isInitialized = false;
     hConsole = NULL;
-    
-    // 短暂延迟，确保控制台完全初始化
+
     Sleep(100);
-    
+
     hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
     if (GetConsoleScreenBufferInfo(hConsole, &consoleInfo)) {
@@ -51,9 +49,9 @@ void ConsoleUtils::Reinit() {
     } else {
         originalAttributes = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
     }
-    
+
     useUTF8 = IsWindows7OrLater();
-    
+
     if (useUTF8) {
         SetConsoleCP(65001);
         SetConsoleOutputCP(65001);
@@ -61,16 +59,15 @@ void ConsoleUtils::Reinit() {
         SetConsoleCP(437);
         SetConsoleOutputCP(437);
     }
-    
+
     Version::InitAsciiArt(useUTF8);
-    
+
     isInitialized = true;
-    
-    // 清屏
+
     COORD coordScreen = { 0, 0 };
     DWORD cCharsWritten;
     DWORD dwConSize;
-    
+
     if (GetConsoleScreenBufferInfo(hConsole, &consoleInfo)) {
         dwConSize = consoleInfo.dwSize.X * consoleInfo.dwSize.Y;
         FillConsoleOutputCharacter(hConsole, (TCHAR)' ', dwConSize, coordScreen, &cCharsWritten);
@@ -97,7 +94,7 @@ void ConsoleUtils::ResetColor() {
 
 void ConsoleUtils::PrintBanner() {
     if (!isInitialized) Init();
-    
+
     SetColor(FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
     printf("============================================\n");
     printf("||           M I K A B O O M               ||\n");
@@ -105,12 +102,12 @@ void ConsoleUtils::PrintBanner() {
     printf("============================================\n");
     ResetColor();
     printf("\n");
-    
+
     SetColor(FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
     std::string art = Version::GetRandomAsciiArt();
     printf("%s\n\n", art.c_str());
     ResetColor();
-    
+
     SetColor(FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
     printf("Resource Monitor - Miku Edition\n");
     printf("=======================================\n");
@@ -120,25 +117,25 @@ void ConsoleUtils::PrintBanner() {
 
 void ConsoleUtils::PrintSystemInfo() {
     if (!isInitialized) Init();
-    
+
     SYSTEM_INFO sysInfo;
     ::GetSystemInfo(&sysInfo);
-    
+
     MemoryStatusSnapshot memInfo;
     const bool hasMemoryInfo = SystemCompat::QueryMemoryStatus(memInfo);
-    
+
     SetColor(FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
-    
+
     std::string expireDate = Version::GetExpireDate();
     size_t pos = expireDate.find('T');
     if (pos != std::string::npos) {
         expireDate[pos] = ' ';
     }
-    
+
     if (useUTF8) {
         printf(">> 操作系统: %s\n", SystemInfo::GetOSName());
-        printf(">> CPU核心数: %lu\n", sysInfo.dwNumberOfProcessors);  // 修改：%d -> %lu
-        printf(">> 物理内存: %.2f GB\n", memInfo.ullTotalPhys / (1024.0 * 1024.0 * 1024.0));
+        printf(">> CPU核心数: %lu\n", sysInfo.dwNumberOfProcessors);
+        printf(">> 物理内存: %.2f GB\n", hasMemoryInfo ? memInfo.totalPhys / (1024.0 * 1024.0 * 1024.0) : 0.0);
         printf("\n");
         printf(">> 版本: %s\n", Version::GetVersion());
         printf(">> 构建时间: %s\n", Version::GetBuildDate());
@@ -146,18 +143,18 @@ void ConsoleUtils::PrintSystemInfo() {
         printf(">> 作者: %s\n", Version::GetAuthor());
     } else {
         printf("OS: %s\n", SystemInfo::GetOSName());
-        printf("CPU Cores: %lu\n", sysInfo.dwNumberOfProcessors);  // 修改：%d -> %lu
-        printf("Physical Memory: %.2f GB\n", memInfo.ullTotalPhys / (1024.0 * 1024.0 * 1024.0));
+        printf("CPU Cores: %lu\n", sysInfo.dwNumberOfProcessors);
+        printf("Physical Memory: %.2f GB\n", hasMemoryInfo ? memInfo.totalPhys / (1024.0 * 1024.0 * 1024.0) : 0.0);
         printf("\n");
         printf("Version: %s\n", Version::GetVersion());
         printf("Build Date: %s\n", Version::GetBuildDate());
         printf("Expire Date: %s\n", expireDate.c_str());
         printf("Author: %s\n", Version::GetAuthor());
     }
-    
+
     ResetColor();
     printf("\n");
-    
+
     if (!Version::IsValid()) {
         SetColor(FOREGROUND_RED | FOREGROUND_INTENSITY);
         if (useUTF8) {
@@ -206,7 +203,7 @@ void ConsoleUtils::PrintSystemInfo() {
             ResetColor();
         }
     }
-    
+
     printf("\n");
 }
 
@@ -224,7 +221,7 @@ void ConsoleUtils::ShowVersion() {
 
 void ConsoleUtils::PrintHelpContent() {
     if (!isInitialized) Init();
-    
+
     SetColor(FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY);
     if (useUTF8) {
         printf(">> 用法:\n");
@@ -233,7 +230,7 @@ void ConsoleUtils::PrintHelpContent() {
     }
     ResetColor();
     printf("  MikaBooM.exe [options] <value>\n\n");
-    
+
     SetColor(FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY);
     if (useUTF8) {
         printf(">> 选项:\n");
@@ -241,70 +238,52 @@ void ConsoleUtils::PrintHelpContent() {
         printf("OPTIONS:\n");
     }
     ResetColor();
-    
+
     if (useUTF8) {
-        printf("  -cpu <value>        设置CPU占用率阈值 (0-100)\n");
-        printf("                      示例: -cpu 80\n\n");
-        
-        printf("  -mem <value>        设置内存占用率阈值 (0-100)\n");
-        printf("                      示例: -mem 70\n\n");
-        
-        printf("  -window <value>     设置窗口显示模式\n");
-        printf("                      true/1/yes/on  - 显示窗口\n");
-        printf("                      false/0/no/off - 隐藏窗口\n");
-        printf("                      示例: -window false\n\n");
-        
-        printf("  -auto               启用开机自启动\n\n");
-        
-        printf("  -noauto             禁用开机自启动\n\n");
-        
-        printf("  -update             检测并安装更新（一键完成）\n\n");
-        
-        printf("  -c <file>           指定配置文件路径\n");
-        printf("                      示例: -c C:\\config.ini\n\n");
-        
-        printf("  -v                  显示版本信息\n\n");
-        
-        printf("  -h                  显示此帮助信息\n\n");
-        
+        printf("  -cpu <value>                设置CPU占用率阈值 (0-100)\n");
+        printf("  -mem <value>                设置内存占用率阈值 (0-100)\n");
+        printf("  -mem-min <MB>               设置内存随机占用最小值\n");
+        printf("  -mem-max <MB>               设置内存随机占用最大值\n");
+        printf("  -mem-freq-min <sec>         设置随机目标变化最短周期\n");
+        printf("  -mem-freq-max <sec>         设置随机目标变化最长周期\n");
+        printf("  -mem-refresh <true|false>   设置是否启用页面刷新\n");
+        printf("  -mem-refresh-after <sec>    设置分配多久后开始刷新页面\n");
+        printf("  -mem-refresh-interval <sec> 设置刷新周期\n");
+        printf("  -mem-refresh-stride <KB>    设置刷新步长\n\n");
+        printf("  -window <value>             设置窗口显示模式\n");
+        printf("  -auto                       启用开机自启动\n");
+        printf("  -noauto                     禁用开机自启动\n");
+        printf("  -update                     检测并安装更新（一键完成）\n");
+        printf("  -c <file>                   指定配置文件路径\n");
+        printf("  -v                          显示版本信息\n");
+        printf("  -h                          显示此帮助信息\n\n");
+
         SetColor(FOREGROUND_GREEN | FOREGROUND_INTENSITY);
         printf(">> 示例:\n");
         ResetColor();
-        printf("  # 首次运行\n");
-        printf("  MikaBooM.exe\n\n");
-        
-        printf("  # 检查并安装更新\n");
-        printf("  MikaBooM.exe -update\n\n");
-        
-        printf("  # 设置CPU阈值80%%\n");
-        printf("  MikaBooM.exe -cpu 80\n\n");
-        
-        printf("  # 后台运行\n");
-        printf("  MikaBooM.exe -window false\n\n");
-        
-        printf("  # 启用开机自启动\n");
-        printf("  MikaBooM.exe -auto\n\n");
-        
+        printf("  MikaBooM.exe -mem-min 256 -mem-max 512\n");
+        printf("  MikaBooM.exe -mem-freq-min 30 -mem-freq-max 60\n");
+        printf("  MikaBooM.exe -mem-refresh true -mem-refresh-interval 30\n\n");
     } else {
-        printf("  -cpu <value>        Set CPU threshold (0-100)\n");
-        printf("  -mem <value>        Set Memory threshold (0-100)\n");
-        printf("  -window <value>     Set window mode (true/false)\n");
-        printf("  -auto               Enable auto-start\n");
-        printf("  -noauto             Disable auto-start\n");
-        printf("  -update             Check and install updates\n");
-        printf("  -c <file>           Specify config file\n");
-        printf("  -v                  Show version\n");
-        printf("  -h                  Show help\n\n");
-        
-        SetColor(FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-        printf("EXAMPLES:\n");
-        ResetColor();
-        printf("  MikaBooM.exe\n");
-        printf("  MikaBooM.exe -update\n");
-        printf("  MikaBooM.exe -cpu 80\n");
-        printf("  MikaBooM.exe -window false\n\n");
+        printf("  -cpu <value>                Set CPU threshold (0-100)\n");
+        printf("  -mem <value>                Set memory threshold (0-100)\n");
+        printf("  -mem-min <MB>               Set minimum random memory target\n");
+        printf("  -mem-max <MB>               Set maximum random memory target\n");
+        printf("  -mem-freq-min <sec>         Set minimum random interval\n");
+        printf("  -mem-freq-max <sec>         Set maximum random interval\n");
+        printf("  -mem-refresh <true|false>   Enable or disable page refresh\n");
+        printf("  -mem-refresh-after <sec>    Delay before refresh starts\n");
+        printf("  -mem-refresh-interval <sec> Set refresh interval\n");
+        printf("  -mem-refresh-stride <KB>    Set refresh stride\n");
+        printf("  -window <value>             Set window mode\n");
+        printf("  -auto                       Enable auto-start\n");
+        printf("  -noauto                     Disable auto-start\n");
+        printf("  -update                     Check and install updates\n");
+        printf("  -c <file>                   Specify config file\n");
+        printf("  -v                          Show version\n");
+        printf("  -h                          Show help\n\n");
     }
-    
+
     SetColor(FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
     printf("%s Makoto\n", useUTF8 ? ">> 作者:" : "Author:");
     SetColor(FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
@@ -363,18 +342,18 @@ void ConsoleUtils::PrintError(const char* format, ...) {
     printf("\n");
 }
 
-void ConsoleUtils::PrintStatus(double cpu, double mem, bool cpuWork, bool memWork, int cpuIntensity, size_t memAllocMB) {
+void ConsoleUtils::PrintStatus(double cpu, double mem, bool cpuWork, bool memWork,
+                               int cpuIntensity, size_t memAllocMB, size_t memResidentMB,
+                               size_t memTargetMB, int residentRatio, bool refreshEnabled,
+                               bool residentApproximate) {
     time_t now = time(0);
     struct tm timeinfo;
-    struct tm* tmp = localtime(&now);
-    if (tmp) {
-        timeinfo = *tmp;
-    } else {
+    if (localtime_s(&timeinfo, &now) != 0) {
         memset(&timeinfo, 0, sizeof(timeinfo));
     }
-    
+
     printf("[%02d:%02d:%02d] ", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-    
+
     if (cpu > 80) {
         SetColor(FOREGROUND_RED | FOREGROUND_INTENSITY);
     } else if (cpu > 60) {
@@ -384,7 +363,7 @@ void ConsoleUtils::PrintStatus(double cpu, double mem, bool cpuWork, bool memWor
     }
     printf("CPU: %5.1f%% ", cpu);
     ResetColor();
-    
+
     if (mem > 80) {
         SetColor(FOREGROUND_RED | FOREGROUND_INTENSITY);
     } else if (mem > 60) {
@@ -394,7 +373,7 @@ void ConsoleUtils::PrintStatus(double cpu, double mem, bool cpuWork, bool memWor
     }
     printf("MEM: %5.1f%%", mem);
     ResetColor();
-    
+
     if (cpuWork) {
         SetColor(FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
         if (useUTF8) {
@@ -411,13 +390,25 @@ void ConsoleUtils::PrintStatus(double cpu, double mem, bool cpuWork, bool memWor
         }
     }
     ResetColor();
-    
+
     if (memWork) {
         SetColor(FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY);
         if (useUTF8) {
-            printf(" [内存计算: 运行中 (已分配:%luMB)]", (unsigned long)memAllocMB);
+            printf(" [内存计算: 运行中 (目标:%luMB 已分配:%luMB 驻留:%luMB 比例:%d%% 刷新:%s%s)]",
+                   (unsigned long)memTargetMB,
+                   (unsigned long)memAllocMB,
+                   (unsigned long)memResidentMB,
+                   residentRatio,
+                   refreshEnabled ? "开" : "关",
+                   residentApproximate ? ",估算" : "");
         } else {
-            printf(" [MEM-W: ON, A:%luMB]", (unsigned long)memAllocMB);
+            printf(" [MEM-W: ON, T:%luMB A:%luMB R:%luMB RR:%d%% %s%s]",
+                   (unsigned long)memTargetMB,
+                   (unsigned long)memAllocMB,
+                   (unsigned long)memResidentMB,
+                   residentRatio,
+                   refreshEnabled ? "REF:ON" : "REF:OFF",
+                   residentApproximate ? ",APPROX" : "");
         }
     } else {
         SetColor(FOREGROUND_INTENSITY);

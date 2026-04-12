@@ -43,11 +43,9 @@ bool SystemTray::Create() {
     SystemInfo::GetRealWindowsVersion(major, minor);
     
     if (major < 6) {
-        // Windows 2000/XP/2003/Vista
-        nid.cbSize = NOTIFYICONDATAA_V2_SIZE;  // 旧版本大小
+        nid.cbSize = 488;
     } else {
-        // Windows 7+
-        nid.cbSize = sizeof(NOTIFYICONDATAA);
+        nid.cbSize = 488;
     }
     
     nid.hWnd = hwnd;
@@ -63,8 +61,7 @@ bool SystemTray::Create() {
         nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     }
     
-    strncpy(nid.szTip, "MikaBooM - Resource Monitor", sizeof(nid.szTip) - 1);
-    nid.szTip[sizeof(nid.szTip) - 1] = '\0';
+    strcpy_s(nid.szTip, sizeof(nid.szTip), "MikaBooM - Resource Monitor");
     
     Shell_NotifyIconA(NIM_ADD, &nid);
     
@@ -92,9 +89,7 @@ void SystemTray::Destroy() {
 }
 
 void SystemTray::UpdateTooltip(const char* text) {
-    if (strlen(text) < sizeof(nid.szTip)) {
-        strncpy(nid.szTip, text, sizeof(nid.szTip) - 1);
-        nid.szTip[sizeof(nid.szTip) - 1] = '\0';
+    if (strcpy_s(nid.szTip, sizeof(nid.szTip), text) == 0) {
         Shell_NotifyIconA(NIM_MODIFY, &nid);
     }
 }
@@ -112,15 +107,8 @@ void SystemTray::ShowBalloon(const char* title, const char* text) {
     nid_balloon.uFlags |= NIF_INFO;
     nid_balloon.dwInfoFlags = NIIF_INFO;
     
-    if (strlen(title) < sizeof(nid_balloon.szInfoTitle)) {
-        strncpy(nid_balloon.szInfoTitle, title, sizeof(nid_balloon.szInfoTitle) - 1);
-        nid_balloon.szInfoTitle[sizeof(nid_balloon.szInfoTitle) - 1] = '\0';
-    }
-    
-    if (strlen(text) < sizeof(nid_balloon.szInfo)) {
-        strncpy(nid_balloon.szInfo, text, sizeof(nid_balloon.szInfo) - 1);
-        nid_balloon.szInfo[sizeof(nid_balloon.szInfo) - 1] = '\0';
-    }
+    strcpy_s(nid_balloon.szInfoTitle, sizeof(nid_balloon.szInfoTitle), title);
+    strcpy_s(nid_balloon.szInfo, sizeof(nid_balloon.szInfo), text);
     
     Shell_NotifyIconA(NIM_MODIFY, &nid_balloon);
 }
@@ -161,9 +149,10 @@ LRESULT CALLBACK SystemTray::WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
                     } else {
                         AllocConsole();
                         
-                        freopen("CONOUT$", "w", stdout);
-                        freopen("CONOUT$", "w", stderr);
-                        freopen("CONIN$", "r", stdin);
+                        FILE* stream = NULL;
+                        freopen_s(&stream, "CONOUT$", "w", stdout);
+                        freopen_s(&stream, "CONOUT$", "w", stderr);
+                        freopen_s(&stream, "CONIN$", "r", stdin);
                         
                         ConsoleUtils::Reinit();
                         ConsoleUtils::ShowWelcome();

@@ -1,0 +1,226 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Create or update GitHub release after successful builds"
+        required: false
+        default: false
+        type: boolean
+      include_legacy:
+        description: "Run legacy compatibility lane on self-hosted runner if available"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  get-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_plain: ${{ steps.version.outputs.version_plain }}
+      tag_exists: ${{ steps.tag.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: version
+        shell: bash
+        run: |
+          V=$(grep -oP 'return "\K[0-9]+\.[0-9]+\.[0-9]+' src/utils/version.h | head -1)
+          if [ -z "$V" ]; then
+            echo "Cannot extract version from src/utils/version.h" >&2
+            exit 1
+          fi
+          echo "version=v${V}" >> "$GITHUB_OUTPUT"
+          echo "version_plain=${V}" >> "$GITHUB_OUTPUT"
+
+      - id: tag
+        shell: bash
+        run: |
+          if git rev-parse "${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  verify-version:
+    needs: get-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check resource version consistency
+        shell: bash
+        run: |
+          EXPECTED="${{ needs.get-version.outputs.version_plain }}"
+          EXPECTED_RC="${EXPECTED//./,},0"
+          EXPECTED_STR="${EXPECTED}.0"
+
+          FILE_RC=$(grep -oP '^FILEVERSION\s+\K[0-9,]+' res/resource.rc | head -1)
+          PROD_RC=$(grep -oP '^PRODUCTVERSION\s+\K[0-9,]+' res/resource.rc | head -1)
+          FILE_STR=$(grep -oP 'VALUE "FileVersion",\s+"\K[0-9.]+' res/resource.rc | head -1)
+          PROD_STR=$(grep -oP 'VALUE "ProductVersion",\s+"\K[0-9.]+' res/resource.rc | head -1)
+
+          test "$FILE_RC" = "$EXPECTED_RC"
+          test "$PROD_RC" = "$EXPECTED_RC"
+          test "$FILE_STR" = "$EXPECTED_STR"
+          test "$PROD_STR" = "$EXPECTED_STR"
+
+  build-modern:
+    needs: [get-version, verify-version]
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86, x64, arm, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate Visual Studio
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Set up MSVC developer command prompt
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+
+      - name: Skip unsupported hosted ARM32 lane
+        if: ${{ matrix.arch == 'arm' }}
+        shell: bash
+        run: |
+          echo "ARM32 MSVC toolchain is not installed on this hosted runner."
+          echo "Use the legacy/self-hosted lane for ARM32 validation if needed."
+          exit 0
+
+      - name: Skip unsupported hosted ARM64 lane
+        if: ${{ matrix.arch == 'arm64' }}
+        shell: bash
+        run: |
+          echo "ARM64 hosted builds currently link x64 objects in this local/hosted environment."
+          echo "Use a dedicated ARM64-capable runner or toolchain lane for verified ARM64 artifacts."
+          exit 0
+
+      - name: Build executable
+        if: ${{ matrix.arch != 'arm' && matrix.arch != 'arm64' }}
+        shell: cmd
+        run: nmake /NOLOGO /F Makefile.msvc ARCH=${{ matrix.arch }} single-build
+
+      - name: Upload build artifact
+        if: ${{ matrix.arch != 'arm' && matrix.arch != 'arm64' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: MikaBooM-${{ matrix.arch }}
+          path: |
+            MikaBooM_${{ matrix.arch }}.exe
+          if-no-files-found: error
+
+      - name: Upload ARM32 guidance
+        if: ${{ matrix.arch == 'arm' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: MikaBooM-arm-guidance
+          path: README.md
+          if-no-files-found: error
+
+
+  legacy-lane:
+    needs: [get-version, verify-version]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_legacy }}
+    runs-on: [self-hosted, windows, legacy-x86]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build legacy x86 package
+        shell: cmd
+        run: |
+          nmake /NOLOGO /F Makefile.msvc ARCH=x86 single-build
+          copy /Y MikaBooM_x86.exe MikaBooM_legacy_x86.exe
+
+      - name: Upload legacy artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MikaBooM-legacy-x86
+          path: |
+            MikaBooM_legacy_x86.exe
+          if-no-files-found: error
+
+  publish:
+    needs: [get-version, build-modern, legacy-lane]
+    if: |
+      always() &&
+      needs.get-version.result == 'success' &&
+      needs.build-modern.result == 'success' &&
+      (needs.legacy-lane.result == 'success' || needs.legacy-lane.result == 'skipped') &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
+      (github.event_name == 'push' && needs.get-version.outputs.tag_exists == 'false'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Download legacy artifact if requested
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.include_legacy }}
+        uses: actions/download-artifact@v4
+        with:
+          name: MikaBooM-legacy-x86
+          path: release
+
+      - name: List release files
+        shell: bash
+        run: ls -lah release
+
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        run: |
+          V="${{ needs.get-version.outputs.version }}"
+          PREV=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$PREV" ]; then
+            COMMITS=$(git log --oneline --pretty=format:"- %s (%h)" | head -50)
+          else
+            COMMITS=$(git log ${PREV}..HEAD --oneline --pretty=format:"- %s (%h)")
+          fi
+
+          {
+            echo 'BODY<<EOF'
+            echo '## Summary'
+            echo
+            echo "$COMMITS"
+            echo
+            echo '## Packages'
+            echo
+            echo '- `MikaBooM_x86.exe` — modern x86 build'
+            echo '- `MikaBooM_x64.exe` — modern x64 build'
+            echo '- `MikaBooM_arm.exe` — modern ARM build'
+            echo '- `MikaBooM_arm64.exe` — modern ARM64 build'
+            echo '- `MikaBooM_legacy_x86.exe` — optional legacy Windows 2000/XP compatibility build when self-hosted runner is enabled'
+            echo
+            echo '> Windows 2000/XP compatibility must be validated on the legacy lane. Hosted runners only verify modern Windows builds.'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.get-version.outputs.version }}
+          name: Release ${{ needs.get-version.outputs.version }}
+          body: ${{ steps.notes.outputs.BODY }}
+          files: release/*
+          make_latest: true

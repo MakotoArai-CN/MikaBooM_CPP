@@ -13,10 +13,12 @@ public:
     static void PrintSuccess(const char* format, ...);
     static void PrintWarning(const char* format, ...);
     static void PrintError(const char* format, ...);
-    static void PrintStatus(double cpu, double mem, bool cpuWork, bool memWork, 
-                          int cpuIntensity, size_t memAllocMB);
+    static void PrintStatus(double cpu, double mem, bool cpuWork, bool memWork,
+                          int cpuIntensity, size_t memAllocMB, size_t memResidentMB,
+                          size_t memTargetMB, int residentRatio, bool refreshEnabled,
+                          bool residentApproximate);
     static bool IsWindows7OrLater();
-    
+
 private:
     static void SetColor(WORD color);
     static void ResetColor();

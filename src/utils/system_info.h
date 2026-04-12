@@ -1,9 +1,13 @@
 #pragma once
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
 
 typedef LONG (WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOEXW);
+typedef BOOL (WINAPI* GetVersionExAPtr)(LPOSVERSIONINFOA);
 
 class SystemInfo {
 public:
@@ -28,32 +32,32 @@ public:
         
         if (major == 10) {
             if (build >= 22000) {
-                strcpy(osName, "Windows 11");
+                strcpy_s(osName, sizeof(osName), "Windows 11");
             } else {
-                strcpy(osName, "Windows 10");
+                strcpy_s(osName, sizeof(osName), "Windows 10");
             }
         } else if (major == 6) {
             if (minor == 3) {
-                strcpy(osName, "Windows 8.1");
+                strcpy_s(osName, sizeof(osName), "Windows 8.1");
             } else if (minor == 2) {
-                strcpy(osName, "Windows 8");
+                strcpy_s(osName, sizeof(osName), "Windows 8");
             } else if (minor == 1) {
-                strcpy(osName, "Windows 7");
+                strcpy_s(osName, sizeof(osName), "Windows 7");
             } else if (minor == 0) {
-                strcpy(osName, "Windows Vista");
+                strcpy_s(osName, sizeof(osName), "Windows Vista");
             }
         } else if (major == 5) {
             if (minor == 2) {
-                strcpy(osName, "Windows Server 2003");
+                strcpy_s(osName, sizeof(osName), "Windows Server 2003");
             } else if (minor == 1) {
-                strcpy(osName, "Windows XP");
+                strcpy_s(osName, sizeof(osName), "Windows XP");
             } else if (minor == 0) {
-                strcpy(osName, "Windows 2000");
+                strcpy_s(osName, sizeof(osName), "Windows 2000");
             }
         } else {
-            sprintf(osName, "Windows (Version %lu.%lu)", major, minor);
+            sprintf_s(osName, sizeof(osName), "Windows (Version %lu.%lu)", major, minor);
         }
-        
+
         return osName;
     }
     
@@ -79,20 +83,28 @@ public:
             }
         }
         
+        HMODULE hKernel32 = GetModuleHandleA("kernel32.dll");
+        GetVersionExAPtr pGetVersionExA = hKernel32
+            ? (GetVersionExAPtr)GetProcAddress(hKernel32, "GetVersionExA")
+            : NULL;
+        if (!pGetVersionExA) {
+            return;
+        }
+
         OSVERSIONINFOEXA osvi;
         ZeroMemory(&osvi, sizeof(osvi));
         osvi.dwOSVersionInfoSize = sizeof(osvi);
-        if (GetVersionExA((LPOSVERSIONINFOA)&osvi)) {
+        if (pGetVersionExA((LPOSVERSIONINFOA)&osvi)) {
             major = osvi.dwMajorVersion;
             minor = osvi.dwMinorVersion;
             if (build) *build = osvi.dwBuildNumber;
             return;
         }
-        
+
         OSVERSIONINFOA basicOsvi;
         ZeroMemory(&basicOsvi, sizeof(basicOsvi));
         basicOsvi.dwOSVersionInfoSize = sizeof(basicOsvi);
-        if (GetVersionExA(&basicOsvi)) {
+        if (pGetVersionExA(&basicOsvi)) {
             major = basicOsvi.dwMajorVersion;
             minor = basicOsvi.dwMinorVersion;
             if (build) *build = basicOsvi.dwBuildNumber;

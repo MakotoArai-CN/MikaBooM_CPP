@@ -2,6 +2,9 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <commctrl.h>
+#ifndef ICC_STANDARD_CLASSES
+#define ICC_STANDARD_CLASSES 0x00004000
+#endif
 #include <psapi.h>
 #include <stdio.h>
 #include <string>
@@ -41,6 +44,7 @@ ResourceMonitor* g_monitor = nullptr;
 CPUWorker* g_cpu_worker = nullptr;
 MemoryWorker* g_memory_worker = nullptr;
 SystemTray* g_tray = nullptr;
+DWORD g_last_mem_notice_tick = 0;
 
 BOOL WINAPI ConsoleHandler(DWORD signal) {
     if (signal == CTRL_C_EVENT || signal == CTRL_CLOSE_EVENT || signal == CTRL_BREAK_EVENT) {
@@ -117,6 +121,33 @@ void ParseCommandLine(int argc, char* argv[]) {
             if (memThreshold >= 0 && memThreshold <= 100) {
                 g_config->SetMemoryThreshold(memThreshold);
             }
+        }
+        else if (arg == "-mem-min" && i + 1 < argc) {
+            g_config->SetMemoryRandomMinMB(atoi(argv[++i]));
+        }
+        else if (arg == "-mem-max" && i + 1 < argc) {
+            g_config->SetMemoryRandomMaxMB(atoi(argv[++i]));
+        }
+        else if (arg == "-mem-freq-min" && i + 1 < argc) {
+            g_config->SetMemoryRandomIntervalMinSec(atoi(argv[++i]));
+        }
+        else if (arg == "-mem-freq-max" && i + 1 < argc) {
+            g_config->SetMemoryRandomIntervalMaxSec(atoi(argv[++i]));
+        }
+        else if (arg == "-mem-refresh" && i + 1 < argc) {
+            std::string value = argv[++i];
+            g_config->SetMemoryRefreshEnabled(
+                value == "true" || value == "1" || value == "yes" || value == "on"
+            );
+        }
+        else if (arg == "-mem-refresh-after" && i + 1 < argc) {
+            g_config->SetMemoryRefreshAfterSec(atoi(argv[++i]));
+        }
+        else if (arg == "-mem-refresh-interval" && i + 1 < argc) {
+            g_config->SetMemoryRefreshIntervalSec(atoi(argv[++i]));
+        }
+        else if (arg == "-mem-refresh-stride" && i + 1 < argc) {
+            g_config->SetMemoryRefreshStrideKB(atoi(argv[++i]));
         }
         else if (arg == "-c" && i + 1 < argc) {
             g_config->SetConfigPath(argv[++i]);
@@ -314,23 +345,52 @@ void MonitorLoop() {
                 g_memory_worker->AdjustLoad(mem_worker_usage, target_mem_worker_usage);
             }
             
-            // 更新托盘图标提示
-            if (g_tray) {
-                char tooltip[256];
-                snprintf(tooltip, sizeof(tooltip),
-                        "MikaBooM\nCPU: %.1f%% / %d%%\nMEM: %.1f%% / %d%%",
-                        total_cpu, cpu_threshold, total_mem, mem_threshold);
-                g_tray->UpdateTooltip(tooltip);
+            MemoryWorkerStats memStats;
+            if (g_memory_worker) {
+                memStats = g_memory_worker->GetStats();
             }
-            
-            // 显示状态
+
+            int residentRatio = 0;
+            if (memStats.allocatedBytes > 0) {
+                residentRatio = (int)((memStats.residentBytes * 100) / memStats.allocatedBytes);
+            }
+
+            if (g_tray) {
+                char tooltip[128];
+                snprintf(tooltip, sizeof(tooltip),
+                        "MikaBooM CPU %.1f%% MEM %.1f%% A/R %lld/%lldMB",
+                        total_cpu, total_mem,
+                        (long long)(memStats.allocatedBytes / 1024 / 1024),
+                        (long long)(memStats.residentBytes / 1024 / 1024));
+                g_tray->UpdateTooltip(tooltip);
+
+                if (g_config->GetNotificationEnabled() && memStats.allocatedBytes > 0 && residentRatio > 0 && residentRatio < 60) {
+                    DWORD cooldownMs = (DWORD)(g_config->GetNotificationCooldown() * 1000UL);
+                    if (now - g_last_mem_notice_tick >= cooldownMs) {
+                        char balloon[256];
+                        snprintf(balloon, sizeof(balloon),
+                                 "Allocated: %lld MB, Resident: %lld MB, Ratio: %d%%",
+                                 (long long)(memStats.allocatedBytes / 1024 / 1024),
+                                 (long long)(memStats.residentBytes / 1024 / 1024),
+                                 residentRatio);
+                        g_tray->ShowBalloon("Memory residency dropped", balloon);
+                        g_last_mem_notice_tick = now;
+                    }
+                }
+            }
+
             if (g_show_window) {
                 ConsoleUtils::PrintStatus(
                     total_cpu, total_mem,
                     g_cpu_worker && g_cpu_worker->IsRunning(),
                     g_memory_worker && g_memory_worker->IsRunning(),
                     g_cpu_worker ? g_cpu_worker->GetIntensity() : 0,
-                    g_memory_worker ? (size_t)(g_memory_worker->GetAllocatedSize() / 1024 / 1024) : 0
+                    (size_t)(memStats.allocatedBytes / 1024 / 1024),
+                    (size_t)(memStats.residentBytes / 1024 / 1024),
+                    (size_t)(memStats.targetBytes / 1024 / 1024),
+                    residentRatio,
+                    memStats.refreshEnabled,
+                    memStats.residentApproximate
                 );
             }
         }
@@ -366,9 +426,23 @@ int main(int argc, char* argv[]) {
         if (useUTF8) {
             printf(">> CPU阈值: %d%%\n", g_config->GetCPUThreshold());
             printf(">> 内存阈值: %d%%\n", g_config->GetMemoryThreshold());
+            printf(">> 内存随机范围: %dMB - %dMB\n", g_config->GetMemoryRandomMinMB(), g_config->GetMemoryRandomMaxMB());
+            printf(">> 内存变化周期: %d - %d 秒\n", g_config->GetMemoryRandomIntervalMinSec(), g_config->GetMemoryRandomIntervalMaxSec());
+            printf(">> 页面刷新: %s (延迟 %d 秒, 周期 %d 秒, 步长 %dKB)\n",
+                   g_config->GetMemoryRefreshEnabled() ? "开启" : "关闭",
+                   g_config->GetMemoryRefreshAfterSec(),
+                   g_config->GetMemoryRefreshIntervalSec(),
+                   g_config->GetMemoryRefreshStrideKB());
         } else {
             printf("CPU Threshold: %d%%\n", g_config->GetCPUThreshold());
             printf("Memory Threshold: %d%%\n", g_config->GetMemoryThreshold());
+            printf("Memory Random Range: %dMB - %dMB\n", g_config->GetMemoryRandomMinMB(), g_config->GetMemoryRandomMaxMB());
+            printf("Memory Random Interval: %d - %d sec\n", g_config->GetMemoryRandomIntervalMinSec(), g_config->GetMemoryRandomIntervalMaxSec());
+            printf("Page Refresh: %s (after %d sec, every %d sec, stride %dKB)\n",
+                   g_config->GetMemoryRefreshEnabled() ? "enabled" : "disabled",
+                   g_config->GetMemoryRefreshAfterSec(),
+                   g_config->GetMemoryRefreshIntervalSec(),
+                   g_config->GetMemoryRefreshStrideKB());
         }
         printf("\n");
     }
@@ -396,7 +470,19 @@ int main(int argc, char* argv[]) {
     
     if (g_config->GetEnableWorker() && Version::IsValid()) {
         g_cpu_worker = new CPUWorker(g_config->GetCPUThreshold());
-        g_memory_worker = new MemoryWorker(g_config->GetMemoryThreshold(), totalMemory);  // 传入实际内存
+        g_memory_worker = new MemoryWorker(g_config->GetMemoryThreshold(), totalMemory);
+        g_memory_worker->ConfigureRandomRange(
+            g_config->GetMemoryRandomMinMB(),
+            g_config->GetMemoryRandomMaxMB(),
+            g_config->GetMemoryRandomIntervalMinSec(),
+            g_config->GetMemoryRandomIntervalMaxSec()
+        );
+        g_memory_worker->ConfigureRefresh(
+            g_config->GetMemoryRefreshEnabled(),
+            g_config->GetMemoryRefreshAfterSec(),
+            g_config->GetMemoryRefreshIntervalSec(),
+            g_config->GetMemoryRefreshStrideKB()
+        );
     }
     
     g_tray = new SystemTray();

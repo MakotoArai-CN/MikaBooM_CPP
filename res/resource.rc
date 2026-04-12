@@ -9,8 +9,8 @@ IDI_MAIN ICON "icon.ico"
 
 // 版本信息（数值替换宏定义）
 1 VERSIONINFO
-FILEVERSION    1,0,2,0
-PRODUCTVERSION 1,0,2,0
+FILEVERSION    1,0,3,0
+PRODUCTVERSION 1,0,3,0
 FILEFLAGSMASK  0x3F
 FILEFLAGS      0x0
 FILEOS         0x00040004L
@@ -23,12 +23,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "Makoto Studio\0"
             VALUE "FileDescription",  "MikaBooM Resource Monitor\0"
-            VALUE "FileVersion",      "1.0.2.0\0"
+            VALUE "FileVersion",      "1.0.3.0\0"
             VALUE "InternalName",     "MikaBooM\0"
             VALUE "LegalCopyright",   "Copyright (C) 2025 Makoto\0"
             VALUE "OriginalFilename", "MikaBooM.exe\0"
             VALUE "ProductName",      "MikaBooM C++ Edition\0"
-            VALUE "ProductVersion",   "1.0.2.0\0"
+            VALUE "ProductVersion",   "1.0.3.0\0"
         END
     END
     BLOCK "VarFileInfo"
