@@ -90,6 +90,7 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Set up MSVC developer command prompt
+        if: ${{ matrix.arch != 'arm' && matrix.arch != 'arm64' }}
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.arch }}
