@@ -142,13 +142,13 @@ jobs:
       - name: Build legacy x86 executable
         shell: cmd
         run: |
-          msys2 -c "make legacy-x86"
+          msys2 -c "cd '%cd%' && make legacy-x86"
           if not exist MikaBooM_x86_win2000.exe exit /b 1
           dir MikaBooM_x86_win2000.exe
 
       - name: Audit legacy x86 imports
         shell: cmd
-        run: msys2 -c "make check-imports"
+        run: msys2 -c "cd '%cd%' && make check-imports"
 
       - name: Upload legacy x86 artifact
         uses: actions/upload-artifact@v4
