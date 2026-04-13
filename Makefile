@@ -63,7 +63,8 @@ CXXFLAGS = -std=c++11 -Wall -O2 $(ARCH_FLAGS) \
            -DWINVER=0x0500 \
            -DFORCE_COMPAT_SAFE_STRING \
            -DEXPIRE_DATE=\"$(EXPIRE_DATE)\" \
-           -ffunction-sections -fdata-sections
+           -ffunction-sections -fdata-sections \
+           -include src/utils/compat_string.h
 
 LDFLAGS = -static -static-libgcc -static-libstdc++ $(ARCH_FLAGS) \
           -Wl,--gc-sections \
