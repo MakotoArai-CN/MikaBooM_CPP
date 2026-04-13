@@ -124,46 +124,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup MSYS2 with MINGW32 environment
-        uses: msys2/setup-msys2@v2
+      - name: Locate Visual Studio
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Set up MSVC developer command prompt for x86
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          msystem: MINGW32
-          update: false
-          path-type: inherit
-          install: >-
-            make
-            mingw-w64-i686-gcc
-            mingw-w64-i686-binutils
+          arch: x86
+          sdk: 10.0.26100.0
 
-      - name: Verify mingw32 toolchain
-        shell: msys2 {0}
+      - name: Build legacy x86 executable with MSVC
+        shell: cmd
         run: |
-          echo "Workspace: $(pwd)"
-          echo "MSYSTEM: $MSYSTEM"
-          which g++
-          which windres
-          which make
-          GCC_TARGET=$(g++ -dumpmachine)
-          echo "GCC target: $GCC_TARGET"
-          test "$GCC_TARGET" = "i686-w64-mingw32"
+          nmake /NOLOGO /F Makefile.msvc ARCH=x86 single-build
+          if not exist MikaBooM_x86.exe exit /b 1
+          dir MikaBooM_x86.exe
 
-      - name: Build legacy x86 executable
-        shell: msys2 {0}
+      - name: Rename to legacy naming convention
+        shell: cmd
         run: |
-          make legacy-x86
-          test -f MikaBooM_x86_win2000.exe
-          ls -lah MikaBooM_x86_win2000.exe
-
-      - name: Audit legacy x86 imports
-        shell: msys2 {0}
-        run: make check-imports
+          copy MikaBooM_x86.exe MikaBooM_x86_win2000.exe
+          if not exist MikaBooM_x86_win2000.exe exit /b 1
 
       - name: Upload legacy x86 artifact
         uses: actions/upload-artifact@v4
         with:
           name: MikaBooM-x86-win2000
           path: |
-            ${{ github.workspace }}/MikaBooM_x86_win2000.exe
+            MikaBooM_x86_win2000.exe
           if-no-files-found: error
 
   publish:

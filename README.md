@@ -3,7 +3,6 @@
     <img src="./res/icon.png" width="128" height="128" alt="MikaBooM">
     <h1>MikaBooM C++ Edition</h1>
 </div>
-<!-- markdownlint-enable MD033 MD041 -->
 
 Windows系统资源监控与调整工具 - C++版本，让你的Windows发光发热！
 
