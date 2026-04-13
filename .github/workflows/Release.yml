@@ -124,36 +124,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install LLVM MinGW toolchain
-        shell: pwsh
-        run: |
-          $url = "https://github.com/mstorsjo/llvm-mingw/releases/download/20250417/llvm-mingw-20250417-msvcrt-x86_64.zip"
-          $zip = "$env:TEMP\llvm-mingw.zip"
-          Invoke-WebRequest -Uri $url -OutFile $zip
-          Expand-Archive -Path $zip -DestinationPath C:\llvm-mingw -Force
-          $dir = (Get-ChildItem C:\llvm-mingw -Directory | Select-Object -First 1).FullName
-          echo "$dir\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
-          choco install make -y
+      - name: Setup MSYS2 MINGW32
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW32
+          update: false
+          install: >-
+            make
+            mingw-w64-i686-gcc
+            mingw-w64-i686-binutils
 
-      - name: Verify toolchain
+      - name: Verify mingw32 toolchain
         shell: cmd
-        run: |
-          where i686-w64-mingw32-g++
-          where i686-w64-mingw32-windres
-          where llvm-objdump
-          i686-w64-mingw32-g++ --version
-          make --version
+        run: msys2 -c "which g++ && which windres && which make && g++ -dumpmachine"
 
       - name: Build legacy x86 executable
         shell: cmd
         run: |
-          make legacy-x86
+          msys2 -c "make legacy-x86"
           if not exist MikaBooM_x86_win2000.exe exit /b 1
           dir MikaBooM_x86_win2000.exe
 
       - name: Audit legacy x86 imports
         shell: cmd
-        run: make check-imports
+        run: msys2 -c "make check-imports"
 
       - name: Upload legacy x86 artifact
         uses: actions/upload-artifact@v4
