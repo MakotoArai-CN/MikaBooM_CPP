@@ -137,18 +137,26 @@ jobs:
 
       - name: Verify mingw32 toolchain
         shell: cmd
-        run: msys2 -c "which g++ && which windres && which make && g++ -dumpmachine"
+        run: |
+          set PATH=C:\msys64\mingw32\bin;C:\msys64\usr\bin;%PATH%
+          where g++
+          where windres
+          where make
+          g++ -dumpmachine
 
       - name: Build legacy x86 executable
         shell: cmd
         run: |
-          msys2 -c "cd '%cd%' && make legacy-x86"
+          set PATH=C:\msys64\mingw32\bin;C:\msys64\usr\bin;%PATH%
+          make legacy-x86
           if not exist MikaBooM_x86_win2000.exe exit /b 1
           dir MikaBooM_x86_win2000.exe
 
       - name: Audit legacy x86 imports
         shell: cmd
-        run: msys2 -c "cd '%cd%' && make check-imports"
+        run: |
+          set PATH=C:\msys64\mingw32\bin;C:\msys64\usr\bin;%PATH%
+          make check-imports
 
       - name: Upload legacy x86 artifact
         uses: actions/upload-artifact@v4
