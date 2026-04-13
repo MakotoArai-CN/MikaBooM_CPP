@@ -153,12 +153,37 @@ jobs:
         shell: msys2 {0}
         run: make check-imports
 
+      - name: Stage legacy x86 artifact
+        shell: pwsh
+        run: |
+          $artifactName = 'MikaBooM_x86_win2000.exe'
+          $workspaceArtifact = Join-Path $env:GITHUB_WORKSPACE $artifactName
+          $matches = @(Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter $artifactName -File -Recurse -ErrorAction SilentlyContinue)
+          if (-not $matches) {
+            $matches = @(Get-ChildItem -Path $env:RUNNER_TEMP -Filter $artifactName -File -Recurse -ErrorAction SilentlyContinue)
+          }
+          if (-not $matches) {
+            Write-Host 'Legacy artifact not found. Workspace executables:'
+            Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter '*.exe' -File -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -ExpandProperty FullName
+            exit 1
+          }
+          $artifact = $matches | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+          Write-Host "Resolved legacy artifact: $($artifact.FullName)"
+          if ($artifact.FullName -ne $workspaceArtifact) {
+            Copy-Item $artifact.FullName $workspaceArtifact -Force
+          }
+          if (-not (Test-Path $workspaceArtifact)) {
+            Write-Host "Expected staged artifact missing: $workspaceArtifact"
+            exit 1
+          }
+
       - name: Upload legacy x86 artifact
         uses: actions/upload-artifact@v4
         with:
           name: MikaBooM-x86-win2000
           path: |
-            MikaBooM_x86_win2000.exe
+            ${{ github.workspace }}/MikaBooM_x86_win2000.exe
           if-no-files-found: error
 
   publish:
