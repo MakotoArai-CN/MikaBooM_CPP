@@ -43,24 +43,32 @@ ARCH_SUFFIX = _x86
 RC_MACHINE = /MACHINE:X86
 LINK_MACHINE = /MACHINE:X86
 SUBSYSTEM_VER = 5.00
+WIN32_WINNT = 0x0500
+ARCH_EXTRA_DEFINES =
 TARGET_ARCH = x86
 !ELSEIF "$(ARCH)" == "x64"
 ARCH_SUFFIX = _x64
 RC_MACHINE = /MACHINE:X64
 LINK_MACHINE = /MACHINE:X64
 SUBSYSTEM_VER = 5.02
+WIN32_WINNT = 0x0500
+ARCH_EXTRA_DEFINES =
 TARGET_ARCH = x64
 !ELSEIF "$(ARCH)" == "arm"
 ARCH_SUFFIX = _arm
 RC_MACHINE = /MACHINE:ARM
 LINK_MACHINE = /MACHINE:ARM
 SUBSYSTEM_VER = 6.02
+WIN32_WINNT = 0x0602
+ARCH_EXTRA_DEFINES = /D_ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE=1
 TARGET_ARCH = arm
 !ELSEIF "$(ARCH)" == "arm64"
 ARCH_SUFFIX = _arm64
 RC_MACHINE = /MACHINE:ARM64
 LINK_MACHINE = /MACHINE:ARM64
 SUBSYSTEM_VER = 10.00
+WIN32_WINNT = 0x0A00
+ARCH_EXTRA_DEFINES =
 TARGET_ARCH = arm64
 !ELSE
 !ERROR Unknown architecture: $(ARCH). Supported: x86, x64, arm, arm64
@@ -73,9 +81,10 @@ OBJDIR_ARCH = $(OBJDIR)\$(ARCH)
 # 编译标志
 # ========================================
 CFLAGS = /c /EHsc /O2 /MT /std:c++14 /W3 /utf-8 \
-         /D_WIN32_WINNT=0x0500 \
-         /DWINVER=0x0500 \
+         /D_WIN32_WINNT=$(WIN32_WINNT) \
+         /DWINVER=$(WIN32_WINNT) \
          /DEXPIRE_DATE=\"$(EXPIRE_DATE)\" \
+         $(ARCH_EXTRA_DEFINES) \
          /Fo$(OBJDIR_ARCH)\ \
          /nologo
 
@@ -182,7 +191,7 @@ $(TARGET): directories $(OBJECTS)
 # ========================================
 $(OBJDIR_ARCH)\resource.res: $(RESDIR)\resource.rc
 	@echo [RC] resource.rc [$(ARCH)]
-	@$(RC) /fo$@ /D_WIN32_WINNT=0x0500 $(RESDIR)\resource.rc
+	@$(RC) /fo$@ /D_WIN32_WINNT=$(WIN32_WINNT) $(RESDIR)\resource.rc
 
 # ========================================
 # 多架构编译目标
