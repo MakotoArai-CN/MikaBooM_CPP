@@ -73,19 +73,27 @@ jobs:
 
   build-all:
     needs: [get-version, verify-version]
-    runs-on: windows-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: x86
             msvc_arch: x86
+            runner: windows-latest
+            sdk: 10.0.26100.0
           - arch: x64
             msvc_arch: x64
+            runner: windows-latest
+            sdk: 10.0.26100.0
           - arch: arm
             msvc_arch: amd64_arm
+            runner: windows-2022
+            sdk: 10.0.22621.0
           - arch: arm64
             msvc_arch: amd64_arm64
+            runner: windows-latest
+            sdk: 10.0.26100.0
     steps:
       - uses: actions/checkout@v4
 
@@ -96,7 +104,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.msvc_arch }}
-          sdk: 10.0.26100.0
+          sdk: ${{ matrix.sdk }}
 
       - name: Build executable
         shell: cmd
