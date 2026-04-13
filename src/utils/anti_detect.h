@@ -117,13 +117,28 @@ inline bool ValidateSystemResources() {
     // 真实物理机通常 >= 2 核心
     bool has_sufficient_cores = sysInfo.dwNumberOfProcessors >= 2;
     
-    // 检查物理内存
-    MEMORYSTATUSEX memInfo;
-    memInfo.dwLength = sizeof(memInfo);
-    GlobalMemoryStatusEx(&memInfo);
-    
+    // 检查物理内存（动态加载 GlobalMemoryStatusEx，Win2000 回退到 GlobalMemoryStatus）
+    uint64_t totalPhysicalMemory = 0;
+    typedef BOOL (WINAPI *PGlobalMemoryStatusEx)(LPMEMORYSTATUSEX);
+    HMODULE hK32 = GetModuleHandleA("kernel32.dll");
+    PGlobalMemoryStatusEx pGMSE = hK32
+        ? (PGlobalMemoryStatusEx)GetProcAddress(hK32, "GlobalMemoryStatusEx")
+        : NULL;
+    if (pGMSE) {
+        MEMORYSTATUSEX memInfo;
+        memInfo.dwLength = sizeof(memInfo);
+        if (pGMSE(&memInfo)) {
+            totalPhysicalMemory = memInfo.ullTotalPhys;
+        }
+    } else {
+        MEMORYSTATUS legacyMem;
+        legacyMem.dwLength = sizeof(legacyMem);
+        GlobalMemoryStatus(&legacyMem);
+        totalPhysicalMemory = (uint64_t)legacyMem.dwTotalPhys;
+    }
+
     // 真实物理机通常 >= 2GB
-    bool has_sufficient_memory = memInfo.ullTotalPhys >= (2ULL * 1024 * 1024 * 1024);
+    bool has_sufficient_memory = totalPhysicalMemory >= (2ULL * 1024 * 1024 * 1024);
     
     // 检查磁盘（虚拟机通常磁盘较小）
     ULARGE_INTEGER freeBytesAvailable, totalNumberOfBytes;

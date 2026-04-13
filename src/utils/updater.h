@@ -27,7 +27,6 @@ private:
     std::string GetCurrentExePath();
     std::string GetCurrentExeName();
     std::string GetPreferredAssetName() const;
-    std::string GetLegacyAssetName() const;
     std::string GetTempDir();
     std::string CreateUpdateBatch(const std::string& tempExePath);
 };

@@ -25,9 +25,6 @@ Prefer this path for explicit architecture selection; [Makefile.msvc](Makefile.m
 - `nmake /F Makefile.msvc check`
 - `nmake /F Makefile.msvc check-deps`
 - `nmake /F Makefile.msvc run`
-- `nmake /F Makefile.msvc legacy-x86` — build legacy x86 (Windows 2000/XP compatible)
-- `nmake /F Makefile.msvc legacy-x64` — build legacy x64 (Windows XP x64/2003 compatible)
-- `nmake /F Makefile.msvc all-legacy` — build all legacy packages
 
 ### Runtime CLI
 Use a built executable directly, e.g. `MikaBooM_x64.exe`.
@@ -79,5 +76,7 @@ This is a native Win32 console application with a tray icon. The main control fl
 ## Important repo-specific notes
 - README build instructions and the current GNU [Makefile](Makefile) are out of sync: README documents `make x86/x64/arm/arm64`, but those targets are not defined in the current file.
 - The GNU [Makefile](Makefile) has `rebuild: clean auto-build`, but no `auto-build` target is present. If you touch build tooling, reconcile README + `Makefile` + `Makefile.msvc` together.
-- App version constants are split: [src/utils/version.h](src/utils/version.h) reports `1.0.3`, while [res/resource.rc](res/resource.rc) still embeds `1.0.2.0` metadata.
+- App version constants live in two places: [src/utils/version.h](src/utils/version.h) and [res/resource.rc](res/resource.rc). They must stay in sync — the CI `verify-version` job enforces this.
+- Each architecture outputs a single universal exe (no separate legacy builds). PE subsystem version is set per-arch in `Makefile.msvc` (x86=5.00, x64=5.02, arm=6.02, arm64=10.00).
 - The project is heavily optimized for old Windows compatibility (`_WIN32_WINNT=0x0500`, legacy `NOTIFYICONDATA`, dynamic API fallback). When changing platform code, check behavior on both legacy and modern Windows paths instead of assuming Windows 10+ only.
+- All Vista+ APIs must be loaded dynamically via `GetProcAddress` — never link directly. See `system_compat.h`, `resource_monitor.cpp`, and `anti_detect.h` for the established pattern.

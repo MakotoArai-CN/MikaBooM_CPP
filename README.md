@@ -16,7 +16,7 @@ Windows系统资源监控与调整工具 - C++版本，让你的Windows发光发
 
 ## 特性
 
-- 支持 Windows 2000 到 Windows 11 全系列（需使用对应工具链构建）
+- 支持 Windows 2000 到 Windows 11 全系列（单个 exe 覆盖，无需分离构建）
 - 支持多架构：x86、x64、ARM、ARM64
 - 单文件可执行程序，无需依赖
 - CPU 和内存使用率实时监控
@@ -33,9 +33,23 @@ Windows系统资源监控与调整工具 - C++版本，让你的Windows发光发
 >
 > 有效期将在正式版发布后更改为 GitHub 仓库更新方式。
 
-### 使用 MinGW
+### 使用 MSVC（推荐）
 
-> 如果需要支持 Windows 2000/2003/XP 等旧系统，请使用 MinGW 4.9.2 等 32 位旧版本编译。
+```bash
+# 构建当前架构（默认 x64）
+nmake /F Makefile.msvc
+
+# 指定架构
+nmake /F Makefile.msvc ARCH=x86
+nmake /F Makefile.msvc ARCH=x64
+nmake /F Makefile.msvc ARCH=arm
+nmake /F Makefile.msvc ARCH=arm64
+
+# 构建全部架构
+nmake /F Makefile.msvc all-arch
+```
+
+### 使用 MinGW
 
 ```bash
 # 32位 x86
@@ -61,12 +75,14 @@ make rebuild
 
 编译后会生成以下文件：
 
-- `MikaBooM_x86.exe` - 32 位 x86 版本
-- `MikaBooM_x64.exe` - 64 位 x64 版本
-- `MikaBooM_arm.exe` - ARM 32 位版本
-- `MikaBooM_arm64.exe` - ARM 64 位版本
-- `MikaBooM_legacy_x86.exe` - 32 位 x86 旧系统兼容版（Windows 2000/XP）
-- `MikaBooM_legacy_x64.exe` - 64 位 x64 旧系统兼容版（Windows XP x64/2003）
+| 文件 | 架构 | 最低支持系统 |
+| --- | --- | --- |
+| `MikaBooM_x86.exe` | x86 (32-bit) | Windows 2000 |
+| `MikaBooM_x64.exe` | x64 (64-bit) | Windows XP x64 / Server 2003 |
+| `MikaBooM_arm.exe` | ARM (32-bit) | Windows RT / 10 ARM |
+| `MikaBooM_arm64.exe` | ARM64 (64-bit) | Windows 10/11 ARM64 |
+
+每个架构只有一个 exe，通过静态 CRT (`/MT`) + 动态 API 加载，单文件覆盖从最低支持系统到 Windows 11。
 
 ## 使用
 
@@ -139,28 +155,25 @@ refresh_stride_kb=4
 
 - 新增 GitHub Actions 工作流 `.github/workflows/Release.yml`
 - GitHub Hosted Runner 自动构建全部架构：`x86`、`x64`、`ARM`、`ARM64`
-- 同时构建 `legacy_x86` 和 `legacy_x64` 旧系统兼容包（Windows 2000/XP）
+- 每个架构生成一个统一的 exe，兼容该架构支持的全部 Windows 版本
 - 所有构建均在 `windows-latest` 上通过 MSVC 交叉编译完成，无需 self-hosted runner
 - Release 仅发布实际构建成功的 `.exe` 产物，不上传 README 等说明文件
 - 发布版本以 `src/utils/version.h` 为准，并校验 `res/resource.rc` 是否同步
 
 ## 兼容性
 
-> 注意：下面的 Windows 兼容性建立在 `legacy_x86` / `legacy_x64` 构建之上；现代 `x64/UCRT` 构建不代表能直接运行在 Windows 2000/XP 上。
+每个架构只需一个 exe 即可覆盖该架构所有受支持的 Windows 版本，通过 PE subsystem version 和动态 API 加载实现：
 
-| Windows 版本 | 支持状态 |
-| --- | --- |
-| Windows 2000 | ✅ |
-| Windows XP | ✅ |
-| Windows Vista | ✅ |
-| Windows 2003 | ✅ |
-| Windows 2008 | ✅ |
-| Windows 2012 | ✅ |
-| Windows 2016 | ✅ |
-| Windows 7 | ✅ |
-| Windows 8/8.1 | ✅ |
-| Windows 10 | ✅ |
-| Windows 11 | ✅ |
+| Windows 版本 | x86 | x64 | ARM | ARM64 |
+| --- | --- | --- | --- | --- |
+| Windows 2000 | ✅ | - | - | - |
+| Windows XP (32-bit) | ✅ | - | - | - |
+| Windows XP x64 / Server 2003 | - | ✅ | - | - |
+| Windows Vista / Server 2008 | ✅ | ✅ | - | - |
+| Windows 7 / Server 2008 R2 | ✅ | ✅ | - | - |
+| Windows 8 / 8.1 / RT | ✅ | ✅ | ✅ | - |
+| Windows 10 | ✅ | ✅ | ✅ | ✅ |
+| Windows 11 | ✅ | ✅ | - | ✅ |
 
 ## 许可证
 
@@ -172,6 +185,13 @@ refresh_stride_kb=4
 
 ## Changelog
 
+- Version 1.0.5: 统一构建，消除 legacy 分离
+  - 每个架构只输出一个 exe，单文件覆盖 Win2000-Win11
+  - 按架构设置 PE subsystem version（x86=5.00, x64=5.02, arm/arm64=6.02/10.00）
+  - 修复 `anti_detect.h` 中 `GlobalMemoryStatusEx` 直接调用导致 Win2000 无法加载的 bug
+  - 删除 legacy_x86 / legacy_x64 分离构建
+  - 简化 updater 资产选择逻辑
+  - CI 流水线精简，移除 build-legacy job
 - Version 1.0.4: 修复控制台显示 BUG
   - 修复托盘图标隐藏/显示窗口问题
   - 优化控制台初始化逻辑

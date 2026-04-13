@@ -3,8 +3,8 @@
 
 class Version {
 public:
-    static const char* GetVersion() { 
-        return "1.0.4"; 
+    static const char* GetVersion() {
+        return "1.0.5";
     }
     
     static const char* GetBuildDate() { 

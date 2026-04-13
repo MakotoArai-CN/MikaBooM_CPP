@@ -32,8 +32,8 @@
 #pragma comment(lib, "advapi32.lib")
 #pragma comment(lib, "psapi.lib")
 #pragma comment(lib, "comctl32.lib")
-#pragma comment(lib, "pdh.lib")
 #pragma comment(lib, "wininet.lib")
+// pdh.dll 通过 LoadLibrary 动态加载，无需静态链接
 #endif
 
 volatile LONG g_running = 1;

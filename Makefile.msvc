@@ -35,34 +35,32 @@ ARCH = x64
 
 # ========================================
 # 根据架构设置编译参数
+# 统一构建：pdh.dll 运行时动态加载，无需静态链接
+# 单个 exe 兼容 Windows 2000 - Windows 11
 # ========================================
 !IF "$(ARCH)" == "x86"
 ARCH_SUFFIX = _x86
-ARCH_DEFINES = /DUSE_PDH
-ARCH_LIBS = pdh.lib
 RC_MACHINE = /MACHINE:X86
 LINK_MACHINE = /MACHINE:X86
+SUBSYSTEM_VER = 5.00
 TARGET_ARCH = x86
 !ELSEIF "$(ARCH)" == "x64"
 ARCH_SUFFIX = _x64
-ARCH_DEFINES = /DUSE_PDH
-ARCH_LIBS = pdh.lib
 RC_MACHINE = /MACHINE:X64
 LINK_MACHINE = /MACHINE:X64
+SUBSYSTEM_VER = 5.02
 TARGET_ARCH = x64
 !ELSEIF "$(ARCH)" == "arm"
 ARCH_SUFFIX = _arm
-ARCH_DEFINES = /DNO_PDH
-ARCH_LIBS = 
 RC_MACHINE = /MACHINE:ARM
 LINK_MACHINE = /MACHINE:ARM
+SUBSYSTEM_VER = 6.02
 TARGET_ARCH = arm
 !ELSEIF "$(ARCH)" == "arm64"
 ARCH_SUFFIX = _arm64
-ARCH_DEFINES = /DNO_PDH
-ARCH_LIBS = 
 RC_MACHINE = /MACHINE:ARM64
 LINK_MACHINE = /MACHINE:ARM64
+SUBSYSTEM_VER = 10.00
 TARGET_ARCH = arm64
 !ELSE
 !ERROR Unknown architecture: $(ARCH). Supported: x86, x64, arm, arm64
@@ -78,20 +76,17 @@ CFLAGS = /c /EHsc /O2 /MT /std:c++14 /W3 /utf-8 \
          /D_WIN32_WINNT=0x0500 \
          /DWINVER=0x0500 \
          /DEXPIRE_DATE=\"$(EXPIRE_DATE)\" \
-         $(ARCH_DEFINES) \
          /Fo$(OBJDIR_ARCH)\ \
          /nologo
 
-LFLAGS = /SUBSYSTEM:CONSOLE \
+LFLAGS = /SUBSYSTEM:CONSOLE,$(SUBSYSTEM_VER) \
          $(LINK_MACHINE) \
          /NOLOGO \
          /OPT:REF \
          /OPT:ICF
 
-BASE_LIBS = kernel32.lib user32.lib shell32.lib advapi32.lib \
-            psapi.lib comctl32.lib wininet.lib
-
-LIBS = $(BASE_LIBS) $(ARCH_LIBS)
+LIBS = kernel32.lib user32.lib shell32.lib advapi32.lib \
+       psapi.lib comctl32.lib wininet.lib
 
 # ========================================
 # 源文件
@@ -209,21 +204,6 @@ arm64:
 single-build: info $(TARGET)
 
 # ========================================
-# Legacy 构建目标（Windows 2000/XP 兼容包）
-# ========================================
-legacy-x86:
-	@$(MAKE) /NOLOGO /F Makefile.msvc ARCH=x86 single-build
-	@copy /Y MikaBooM_x86.exe MikaBooM_legacy_x86.exe >nul
-	@echo Legacy x86 build: MikaBooM_legacy_x86.exe
-
-legacy-x64:
-	@$(MAKE) /NOLOGO /F Makefile.msvc ARCH=x64 single-build
-	@copy /Y MikaBooM_x64.exe MikaBooM_legacy_x64.exe >nul
-	@echo Legacy x64 build: MikaBooM_legacy_x64.exe
-
-all-legacy: legacy-x86 legacy-x64
-
-# ========================================
 # 清理
 # ========================================
 clean:
@@ -233,8 +213,6 @@ clean:
 	@if exist MikaBooM_x64.exe del /f /q MikaBooM_x64.exe
 	@if exist MikaBooM_arm.exe del /f /q MikaBooM_arm.exe
 	@if exist MikaBooM_arm64.exe del /f /q MikaBooM_arm64.exe
-	@if exist MikaBooM_legacy_x86.exe del /f /q MikaBooM_legacy_x86.exe
-	@if exist MikaBooM_legacy_x64.exe del /f /q MikaBooM_legacy_x64.exe
 	@if exist *.pdb del /f /q *.pdb
 	@if exist *.ilk del /f /q *.ilk
 	@echo Clean complete.
@@ -290,9 +268,7 @@ check-deps:
 	@if exist MikaBooM_x64.exe (echo MikaBooM_x64.exe: & dumpbin /DEPENDENTS MikaBooM_x64.exe | findstr /C:".dll" & echo ========================================)
 	@if exist MikaBooM_arm.exe (echo MikaBooM_arm.exe: & dumpbin /DEPENDENTS MikaBooM_arm.exe | findstr /C:".dll" & echo ========================================)
 	@if exist MikaBooM_arm64.exe (echo MikaBooM_arm64.exe: & dumpbin /DEPENDENTS MikaBooM_arm64.exe | findstr /C:".dll" & echo ========================================)
-	@if exist MikaBooM_legacy_x86.exe (echo MikaBooM_legacy_x86.exe: & dumpbin /DEPENDENTS MikaBooM_legacy_x86.exe | findstr /C:".dll" & echo ========================================)
-	@if exist MikaBooM_legacy_x64.exe (echo MikaBooM_legacy_x64.exe: & dumpbin /DEPENDENTS MikaBooM_legacy_x64.exe | findstr /C:".dll" & echo ========================================)
-	@echo All DLLs should be available in Windows 2000+
+	@echo All DLLs should be available on the target OS
 	@echo ========================================
 
 # ========================================
@@ -312,13 +288,10 @@ help:
 	@echo Targets:
 	@echo   all          - Build current architecture (default)
 	@echo   all-arch     - Build all architectures (x86/x64/ARM/ARM64)
-	@echo   x86          - Build x86 (32-bit)
-	@echo   x64          - Build x64 (64-bit)
-	@echo   arm          - Build ARM (32-bit)
-	@echo   arm64        - Build ARM64 (64-bit)
-	@echo   legacy-x86   - Build legacy x86 (Windows 2000/XP compatible)
-	@echo   legacy-x64   - Build legacy x64 (Windows XP x64/2003 compatible)
-	@echo   all-legacy   - Build all legacy packages
+	@echo   x86          - Build x86 (32-bit, Windows 2000+)
+	@echo   x64          - Build x64 (64-bit, Windows XP x64/2003+)
+	@echo   arm          - Build ARM (32-bit, Windows RT/10 ARM)
+	@echo   arm64        - Build ARM64 (64-bit, Windows 10/11 ARM64)
 	@echo   clean        - Clean build files
 	@echo   rebuild      - Clean and rebuild current architecture
 	@echo   rebuild-all  - Clean and rebuild all architectures
@@ -331,7 +304,6 @@ help:
 	@echo   nmake /F Makefile.msvc
 	@echo   nmake /F Makefile.msvc ARCH=x86
 	@echo   nmake /F Makefile.msvc all-arch
-	@echo   nmake /F Makefile.msvc all-legacy
 	@echo   nmake /F Makefile.msvc clean
 	@echo.
 	@echo Architecture Selection:
@@ -351,5 +323,4 @@ help:
 
 .PHONY: all info directories clean rebuild rebuild-all \
         all-arch x86 x64 arm arm64 single-build \
-        all-legacy legacy-x86 legacy-x64 \
         check check-deps run help

@@ -1,7 +1,6 @@
 #include "updater.h"
 #include "version.h"
 #include "console_utils.h"
-#include "system_info.h"
 #include <windows.h>
 #include <wininet.h>
 #include <cstdio>
@@ -34,24 +33,7 @@ std::string Updater::GetCurrentExeName() {
 
 std::string Updater::GetPreferredAssetName() const {
     std::string arch = Version::GetArch();
-    DWORD major = 0, minor = 0;
-    SystemInfo::GetRealWindowsVersion(major, minor);
-    if (major < 6) {
-        // Pre-Vista: use legacy build for old OS compatibility
-        return std::string("MikaBooM_legacy_") + arch + ".exe";
-    }
     return std::string("MikaBooM_") + arch + ".exe";
-}
-
-std::string Updater::GetLegacyAssetName() const {
-    DWORD major = 0, minor = 0;
-    SystemInfo::GetRealWindowsVersion(major, minor);
-    if (major < 6) {
-        // Pre-Vista: try architecture-specific legacy build first
-        std::string arch = Version::GetArch();
-        return std::string("MikaBooM_legacy_") + arch + ".exe";
-    }
-    return "MikaBooM.exe";
 }
 
 std::string Updater::GetTempDir() {
@@ -138,10 +120,9 @@ bool Updater::DownloadToMemory(const std::string& url, std::vector<char>& buffer
 
     if (downloadUrl == url) {
         const std::string currentExe = GetCurrentExeName();
-        const std::string legacy = GetLegacyAssetName();
         const std::string fallback = "MikaBooM.exe";
         const std::string preferred = GetPreferredAssetName();
-        const std::string names[] = { preferred, currentExe, legacy, fallback };
+        const std::string names[] = { preferred, currentExe, fallback };
         bool replaced = false;
 
         for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {

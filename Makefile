@@ -174,8 +174,6 @@ clean:
 	@if exist MikaBooM_x64.exe del /f /q MikaBooM_x64.exe
 	@if exist MikaBooM_arm.exe del /f /q MikaBooM_arm.exe
 	@if exist MikaBooM_arm64.exe del /f /q MikaBooM_arm64.exe
-	@if exist MikaBooM_legacy_x86.exe del /f /q MikaBooM_legacy_x86.exe
-	@if exist MikaBooM_legacy_x64.exe del /f /q MikaBooM_legacy_x64.exe
 	@echo Clean complete.
 
 rebuild: clean auto-build
@@ -237,7 +235,7 @@ check-deps:
 	@if exist MikaBooM_x64.exe (echo MikaBooM_x64.exe: & llvm-objdump -p MikaBooM_x64.exe 2>nul | findstr "DLL Name" || objdump -p MikaBooM_x64.exe | findstr "DLL Name" & echo ========================================)
 	@if exist MikaBooM_arm.exe (echo MikaBooM_arm.exe: & llvm-objdump -p MikaBooM_arm.exe 2>nul | findstr "DLL Name" || objdump -p MikaBooM_arm.exe | findstr "DLL Name" & echo ========================================)
 	@if exist MikaBooM_arm64.exe (echo MikaBooM_arm64.exe: & llvm-objdump -p MikaBooM_arm64.exe 2>nul | findstr "DLL Name" || objdump -p MikaBooM_arm64.exe | findstr "DLL Name" & echo ========================================)
-	@echo All DLLs should be available in Windows 2000
+	@echo All DLLs should be available on the target OS
 	@echo ========================================
 
 .PHONY: all clean rebuild run check test directories info

@@ -109,51 +109,12 @@ jobs:
             MikaBooM_${{ matrix.arch }}.exe
           if-no-files-found: error
 
-  build-legacy:
-    needs: [get-version, verify-version]
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86
-            msvc_arch: x86
-            suffix: legacy_x86
-          - arch: x64
-            msvc_arch: x64
-            suffix: legacy_x64
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Locate Visual Studio
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Set up MSVC developer command prompt
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: ${{ matrix.msvc_arch }}
-
-      - name: Build legacy executable
-        shell: cmd
-        run: |
-          nmake /NOLOGO /F Makefile.msvc ARCH=${{ matrix.arch }} single-build
-          copy /Y MikaBooM_${{ matrix.arch }}.exe MikaBooM_${{ matrix.suffix }}.exe
-
-      - name: Upload legacy artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: MikaBooM-${{ matrix.suffix }}
-          path: |
-            MikaBooM_${{ matrix.suffix }}.exe
-          if-no-files-found: error
-
   publish:
-    needs: [get-version, build-all, build-legacy]
+    needs: [get-version, build-all]
     if: |
       always() &&
       needs.get-version.result == 'success' &&
       needs.build-all.result == 'success' &&
-      needs.build-legacy.result == 'success' &&
       ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
       (github.event_name == 'push' && needs.get-version.outputs.tag_exists == 'false'))
     runs-on: ubuntu-latest
@@ -203,17 +164,15 @@ jobs:
             for file in "${EXES[@]}"; do
               base=$(basename "$file")
               case "$base" in
-                *legacy_x86*) echo "| \`$base\` | x86 | Windows 2000/XP+ (legacy) |" ;;
-                *legacy_x64*) echo "| \`$base\` | x64 | Windows XP x64/2003+ (legacy) |" ;;
-                *_x86*)       echo "| \`$base\` | x86 | Windows Vista+ |" ;;
-                *_x64*)       echo "| \`$base\` | x64 | Windows Vista+ |" ;;
+                *_x86*)       echo "| \`$base\` | x86 | Windows 2000+ |" ;;
+                *_x64*)       echo "| \`$base\` | x64 | Windows XP x64 / Server 2003+ |" ;;
                 *_arm.*)      echo "| \`$base\` | ARM | Windows RT / 10 ARM |" ;;
                 *_arm64*)     echo "| \`$base\` | ARM64 | Windows 10/11 ARM64 |" ;;
                 *)            echo "| \`$base\` | - | - |" ;;
               esac
             done
             echo
-            echo '> **Legacy builds** (`legacy_x86`, `legacy_x64`) target Windows 2000/XP and use the same `_WIN32_WINNT=0x0500` flags. Modern builds (`x86`, `x64`, `arm`, `arm64`) target Windows Vista+.'
+            echo '> All builds use static CRT (`/MT`) and dynamic API loading for maximum OS compatibility. Each architecture is a single universal exe — no separate legacy builds needed.'
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
