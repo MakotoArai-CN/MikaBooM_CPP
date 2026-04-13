@@ -16,8 +16,9 @@ Windows系统资源监控与调整工具 - C++版本，让你的Windows发光发
 
 ## 特性
 
-- 支持 Windows 2000 到 Windows 11 全系列（单个 exe 覆盖，无需分离构建）
-- 支持多架构：x86、x64、ARM、ARM64
+- 支持多架构：modern x86、modern x64、legacy x86、ARM、ARM64
+- Windows 2000 / XP / 2003 通过独立的 legacy x86 发行物支持
+- modern MSVC 构建不再宣称单个 x86 exe 覆盖 Windows 2000 到 Windows 11
 - 单文件可执行程序，无需依赖
 - CPU 和内存使用率实时监控
 - 智能负载调整
@@ -49,20 +50,14 @@ nmake /F Makefile.msvc ARCH=arm64
 nmake /F Makefile.msvc all-arch
 ```
 
-### 使用 MinGW
+### 使用 GNU Make（legacy x86）
 
 ```bash
-# 32位 x86
-make x86
+# 构建 Windows 2000 / XP / 2003 专用 x86 包
+make legacy-x86
 
-# 64位 x64
-make x64
-
-# ARM 32位
-make arm
-
-# ARM 64位
-make arm64
+# 检查 Win2000 禁止导入项
+make check-imports
 ```
 
 ### 重新编译
@@ -75,14 +70,15 @@ make rebuild
 
 编译后会生成以下文件：
 
-| 文件 | 架构 | 最低支持系统 |
+| 文件 | 架构 | 说明 |
 | --- | --- | --- |
-| `MikaBooM_x86.exe` | x86 (32-bit) | Windows 2000 |
-| `MikaBooM_x64.exe` | x64 (64-bit) | Windows XP x64 / Server 2003 |
+| `MikaBooM_x86.exe` | modern x86 (32-bit) | 现代 MSVC 构建，不再宣称支持 Windows 2000 |
+| `MikaBooM_x64.exe` | modern x64 (64-bit) | 现代 MSVC 构建 |
+| `MikaBooM_x86_win2000.exe` | legacy x86 (32-bit) | Windows 2000 / XP / 2003 专用发行物 |
 | `MikaBooM_arm.exe` | ARM (32-bit) | Windows RT / 10 ARM |
 | `MikaBooM_arm64.exe` | ARM64 (64-bit) | Windows 10/11 ARM64 |
 
-每个架构只有一个 exe，通过静态 CRT (`/MT`) + 动态 API 加载，单文件覆盖从最低支持系统到 Windows 11。
+当前仓库采用 modern / legacy 双轨发布：Win2000/XP 仅由独立 legacy x86 包承诺，不能再把 modern x86 视为 Win2000 通用包。
 
 ## 使用
 
@@ -154,26 +150,30 @@ refresh_stride_kb=4
 ## 自动发布
 
 - 新增 GitHub Actions 工作流 `.github/workflows/Release.yml`
-- GitHub Hosted Runner 自动构建全部架构：`x86`、`x64`、`ARM`、`ARM64`
-- 每个架构生成一个统一的 exe，兼容该架构支持的全部 Windows 版本
-- 所有构建均在 `windows-latest` 上通过 MSVC 交叉编译完成，无需 self-hosted runner
+- GitHub Hosted Runner 自动构建 modern 架构：`x86`、`x64`、`ARM`、`ARM64`
+- 额外构建独立的 legacy x86 发行物：`MikaBooM_x86_win2000.exe`
+- modern 构建由 MSVC 交叉编译完成；legacy x86 通过 GNU Make / MinGW 链路构建
+- ARM 发行物使用 `windows-2022` + `10.0.22621.0` SDK，其余 modern 架构使用 `windows-latest` + `10.0.26100.0`
 - Release 仅发布实际构建成功的 `.exe` 产物，不上传 README 等说明文件
 - 发布版本以 `src/utils/version.h` 为准，并校验 `res/resource.rc` 是否同步
+- legacy x86 发布前会执行导入表审计，避免误发包含 Win2000 禁止导入项的二进制
 
 ## 兼容性
 
-每个架构只需一个 exe 即可覆盖该架构所有受支持的 Windows 版本，通过 PE subsystem version 和动态 API 加载实现：
+当前仓库采用 modern / legacy 双轨兼容策略：modern 构建覆盖较新的 Windows 版本，Windows 2000 / XP / 2003 由独立 legacy x86 发行物承诺。
 
-| Windows 版本 | x86 | x64 | ARM | ARM64 |
-| --- | --- | --- | --- | --- |
-| Windows 2000 | ✅ | - | - | - |
-| Windows XP (32-bit) | ✅ | - | - | - |
-| Windows XP x64 / Server 2003 | - | ✅ | - | - |
-| Windows Vista / Server 2008 | ✅ | ✅ | - | - |
-| Windows 7 / Server 2008 R2 | ✅ | ✅ | - | - |
-| Windows 8 / 8.1 / RT | ✅ | ✅ | ✅ | - |
-| Windows 10 | ✅ | ✅ | ✅ | ✅ |
-| Windows 11 | ✅ | ✅ | - | ✅ |
+| Windows 版本 | modern x86 | modern x64 | legacy x86 | ARM | ARM64 |
+| --- | --- | --- | --- | --- | --- |
+| Windows 2000 | - | - | ✅ | - | - |
+| Windows XP (32-bit) | - | - | ✅ | - | - |
+| Windows XP x64 / Server 2003 | - | ⚠️ | - | - | - |
+| Windows Vista / Server 2008 | ⚠️ | ⚠️ | - | - | - |
+| Windows 7 / Server 2008 R2 | ⚠️ | ⚠️ | - | - | - |
+| Windows 8 / 8.1 / RT | ⚠️ | ⚠️ | - | ✅ | - |
+| Windows 10 | ✅ | ✅ | - | ✅ | ✅ |
+| Windows 11 | ✅ | ✅ | - | - | ✅ |
+
+> 说明：`✅` 表示当前发行物明确支持；`⚠️` 表示代码层面已尽量兼容，但 modern MSVC 产物的实际最低支持系统仍以工具链与运行库验证结果为准。Windows 2000 / XP / 2003 请始终使用 `MikaBooM_x86_win2000.exe`。
 
 ## 许可证
 
@@ -185,13 +185,13 @@ refresh_stride_kb=4
 
 ## Changelog
 
-- Version 1.0.5: 统一构建，消除 legacy 分离
-  - 每个架构只输出一个 exe，单文件覆盖 Win2000-Win11
+- Version 1.0.5: 统一 modern 构建并补回 legacy x86 发行物
+  - modern 架构统一为 x86 / x64 / ARM / ARM64 输出
+  - Windows 2000 / XP / 2003 改由独立 `MikaBooM_x86_win2000.exe` 承诺支持
   - 按架构设置 PE subsystem version（x86=5.00, x64=5.02, arm/arm64=6.02/10.00）
   - 修复 `anti_detect.h` 中 `GlobalMemoryStatusEx` 直接调用导致 Win2000 无法加载的 bug
-  - 删除 legacy_x86 / legacy_x64 分离构建
-  - 简化 updater 资产选择逻辑
-  - CI 流水线精简，移除 build-legacy job
+  - updater 按架构和系统版本选择发行资产
+  - CI 同时构建 modern 架构与 legacy x86，并对 legacy x86 执行导入表审计
 - Version 1.0.4: 修复控制台显示 BUG
   - 修复托盘图标隐藏/显示窗口问题
   - 优化控制台初始化逻辑

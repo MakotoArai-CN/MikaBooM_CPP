@@ -5,11 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build and run
 
 ### GNU Make / MinGW
-- `make` — build the default target from [Makefile](Makefile)
+
+- `make` / `make legacy-x86` — build the legacy x86 target from [Makefile](Makefile)
 - `make clean` — remove `build/` and generated `.exe` files
-- `make rebuild` — clean + rebuild (currently points at `auto-build`; see notes below)
+- `make rebuild` — clean + rebuild the legacy x86 target
 - `make check` — print detected compiler / resource compiler support
-- `make check-deps` — inspect DLL dependencies of built executables
+- `make check-deps` — inspect DLL dependencies of the legacy x86 executable
+- `make check-imports` — audit forbidden Win2000 imports in the legacy x86 executable
 
 ### MSVC / NMake
 Prefer this path for explicit architecture selection; [Makefile.msvc](Makefile.msvc) is the only build file in the repo that currently defines per-arch targets.
@@ -74,9 +76,11 @@ This is a native Win32 console application with a tray icon. The main control fl
 - [src/utils/anti_detect.h](src/utils/anti_detect.h) is referenced from startup and worker/resource code for initialization guards, timing jitter, and dynamic API lookup; changes there affect startup behavior broadly.
 
 ## Important repo-specific notes
-- README build instructions and the current GNU [Makefile](Makefile) are out of sync: README documents `make x86/x64/arm/arm64`, but those targets are not defined in the current file.
-- The GNU [Makefile](Makefile) has `rebuild: clean auto-build`, but no `auto-build` target is present. If you touch build tooling, reconcile README + `Makefile` + `Makefile.msvc` together.
+
+- The repository now ships a modern / legacy split: [Makefile.msvc](Makefile.msvc) builds modern `x86` / `x64` / `arm` / `arm64` executables, while [Makefile](Makefile) builds the dedicated legacy x86 artifact `MikaBooM_x86_win2000.exe` for Windows 2000 / XP / 2003.
 - App version constants live in two places: [src/utils/version.h](src/utils/version.h) and [res/resource.rc](res/resource.rc). They must stay in sync — the CI `verify-version` job enforces this.
-- Each architecture outputs a single universal exe (no separate legacy builds). PE subsystem version is set per-arch in `Makefile.msvc` (x86=5.00, x64=5.02, arm=6.02, arm64=10.00).
+- `Makefile.msvc` sets PE subsystem versions per architecture (x86=5.00, x64=5.02, arm=6.02, arm64=10.00), but modern MSVC outputs must not be described as universal Win2000-compatible binaries.
+- The release workflow in [.github/workflows/Release.yml](.github/workflows/Release.yml) builds all modern architectures plus the separate legacy x86 artifact, and audits legacy imports before publishing.
 - The project is heavily optimized for old Windows compatibility (`_WIN32_WINNT=0x0500`, legacy `NOTIFYICONDATA`, dynamic API fallback). When changing platform code, check behavior on both legacy and modern Windows paths instead of assuming Windows 10+ only.
 - All Vista+ APIs must be loaded dynamically via `GetProcAddress` — never link directly. See `system_compat.h`, `resource_monitor.cpp`, and `anti_detect.h` for the established pattern.
+- If you change asset naming or release packaging, keep [src/utils/updater.cpp](src/utils/updater.cpp), [README.md](README.md), and the release workflow in sync so old systems continue selecting the legacy x86 package.

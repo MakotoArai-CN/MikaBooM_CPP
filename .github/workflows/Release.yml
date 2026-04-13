@@ -118,12 +118,35 @@ jobs:
             MikaBooM_${{ matrix.arch }}.exe
           if-no-files-found: error
 
+  build-legacy-x86:
+    needs: [get-version, verify-version]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build legacy x86 executable
+        shell: cmd
+        run: make legacy-x86
+
+      - name: Audit legacy x86 imports
+        shell: cmd
+        run: make check-imports
+
+      - name: Upload legacy x86 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MikaBooM-x86-win2000
+          path: |
+            MikaBooM_x86_win2000.exe
+          if-no-files-found: error
+
   publish:
-    needs: [get-version, build-all]
+    needs: [get-version, build-all, build-legacy-x86]
     if: |
       always() &&
       needs.get-version.result == 'success' &&
       needs.build-all.result == 'success' &&
+      needs.build-legacy-x86.result == 'success' &&
       ((github.event_name == 'workflow_dispatch' && inputs.publish_release) ||
       (github.event_name == 'push' && needs.get-version.outputs.tag_exists == 'false'))
     runs-on: ubuntu-latest
@@ -173,15 +196,16 @@ jobs:
             for file in "${EXES[@]}"; do
               base=$(basename "$file")
               case "$base" in
-                *_x86*)       echo "| \`$base\` | x86 | Windows 2000+ |" ;;
-                *_x64*)       echo "| \`$base\` | x64 | Windows XP x64 / Server 2003+ |" ;;
-                *_arm.*)      echo "| \`$base\` | ARM | Windows RT / 10 ARM |" ;;
-                *_arm64*)     echo "| \`$base\` | ARM64 | Windows 10/11 ARM64 |" ;;
-                *)            echo "| \`$base\` | - | - |" ;;
+                *_x86_win2000*) echo "| \`$base\` | x86 | Windows 2000 / XP / 2003 (legacy) |" ;;
+                *_x86*)         echo "| \`$base\` | x86 | modern x86 (minimum OS depends on toolchain validation) |" ;;
+                *_x64*)         echo "| \`$base\` | x64 | modern x64 |" ;;
+                *_arm.*)        echo "| \`$base\` | ARM | Windows RT / 10 ARM |" ;;
+                *_arm64*)       echo "| \`$base\` | ARM64 | Windows 10/11 ARM64 |" ;;
+                *)              echo "| \`$base\` | - | - |" ;;
               esac
             done
             echo
-            echo '> All builds use static CRT (`/MT`) and dynamic API loading for maximum OS compatibility. Each architecture is a single universal exe — no separate legacy builds needed.'
+            echo '> Modern MSVC builds no longer claim Windows 2000 compatibility. Windows 2000 / XP / 2003 support is provided only by the separate legacy x86 artifact after import auditing.'
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 

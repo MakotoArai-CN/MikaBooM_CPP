@@ -1,34 +1,24 @@
-# MikaBooM C++ Edition Makefile
-# 自动检测编译器并支持多架构 - Windows 2000+ 兼容
-# 支持 LLVM-MinGW 和 GCC MinGW-w64
-# 完整支持 x86/x64/ARM/ARM64 资源文件
+# MikaBooM Legacy x86 GNU Makefile
+# 用于构建 Windows 2000 / XP / 2003 专用的 legacy x86 发行物
+# 现代多架构构建请使用 Makefile.msvc
 
 SHELL = cmd
 
-# 检测可用编译器
 CROSS_X86 := $(shell where i686-w64-mingw32-g++ 2>nul)
-CROSS_X64 := $(shell where x86_64-w64-mingw32-g++ 2>nul)
-CROSS_ARM := $(shell where armv7-w64-mingw32-g++ 2>nul)
-CROSS_ARM_ALT := $(shell where arm-w64-mingw32-g++ 2>nul)
-CROSS_ARM64 := $(shell where aarch64-w64-mingw32-g++ 2>nul)
-
 LOCAL_GCC := $(shell where g++ 2>nul)
 LOCAL_RC := $(shell where windres 2>nul)
-LLVM_RC := $(shell where llvm-rc 2>nul)
-LLVM_CVTRES := $(shell where llvm-cvtres 2>nul)
+LLVM_OBJDUMP := $(shell where llvm-objdump 2>nul)
+LOCAL_OBJDUMP := $(shell where objdump 2>nul)
 
-# 优先使用 armv7，备用 arm
-ifndef CROSS_ARM
-    CROSS_ARM := $(CROSS_ARM_ALT)
+ifdef LLVM_OBJDUMP
+    OBJDUMP = llvm-objdump
+else ifdef LOCAL_OBJDUMP
+    OBJDUMP = objdump
 endif
 
-# 检测本地编译器支持的架构
 ifdef LOCAL_GCC
     GCC_TARGET := $(shell g++ -dumpmachine 2>nul)
-    ifeq ($(findstring x86_64,$(GCC_TARGET)),x86_64)
-        LOCAL_SUPPORTS_X64 = 1
-        LOCAL_SUPPORTS_X86 = 1
-    else ifeq ($(findstring i686,$(GCC_TARGET)),i686)
+    ifeq ($(findstring i686,$(GCC_TARGET)),i686)
         LOCAL_SUPPORTS_X86 = 1
     else ifeq ($(findstring mingw32,$(GCC_TARGET)),mingw32)
         LOCAL_SUPPORTS_X86 = 1
@@ -37,47 +27,86 @@ endif
 
 SRCDIR = src
 RESDIR = res
+OBJDIR = build\legacy_x86
+TARGET = MikaBooM_x86_win2000.exe
 
-# 过期时间（全局）
 EXPIRE_DATE := $(shell powershell -Command "Get-Date (Get-Date).AddYears(2) -Format 'yyyy-MM-ddTHH:mm:ss'" 2>nul)
 ifeq ($(EXPIRE_DATE),)
     EXPIRE_DATE := 2027-12-31T23:59:59
 endif
 
-# 编译标志 - 注入过期时间与目标平台
-# 注意：使用单引号包裹宏定义值，避免空格问题
-CXXFLAGS = -std=c++11 -Wall -O2 \
+ifdef CROSS_X86
+    CXX = i686-w64-mingw32-g++
+    RC = i686-w64-mingw32-windres
+    ARCH_FLAGS = -m32
+else ifdef LOCAL_SUPPORTS_X86
+    CXX = g++
+    RC = windres
+    ARCH_FLAGS = -m32
+endif
+
+CXXFLAGS = -std=c++11 -Wall -O2 $(ARCH_FLAGS) \
+           -static-libgcc -static-libstdc++ \
            -D_WIN32_WINNT=0x0500 \
            -DWINVER=0x0500 \
-           -DEXPIRE_DATE=\"$(EXPIRE_DATE)\"
+           -DEXPIRE_DATE=\"$(EXPIRE_DATE)\" \
+           -ffunction-sections -fdata-sections
 
-# 链接标志 - 静态链接运行库，确保包含 PDH
-LDFLAGS = -static-libgcc -static-libstdc++ \
-          -Wl,-Bstatic -lstdc++ -lpthread -Wl,-Bdynamic \
+LDFLAGS = -static -static-libgcc -static-libstdc++ $(ARCH_FLAGS) \
+          -Wl,--gc-sections \
           -lkernel32 -luser32 -lshell32 -ladvapi32 \
-          -lpsapi -lcomctl32 -lpdh -lwininet \
+          -lpsapi -lcomctl32 -lwininet \
           -mconsole
 
-# 源文件
-SOURCES = $(SRCDIR)/main.cpp \
-          $(SRCDIR)/core/resource_monitor.cpp \
-          $(SRCDIR)/core/config_manager.cpp \
-          $(SRCDIR)/core/cpu_worker.cpp \
-          $(SRCDIR)/core/memory_worker.cpp \
-          $(SRCDIR)/platform/system_tray.cpp \
-          $(SRCDIR)/platform/autostart.cpp \
-          $(SRCDIR)/utils/console_utils.cpp \
-          $(SRCDIR)/utils/version.cpp \
-          $(SRCDIR)/utils/updater.cpp
+OBJECTS = $(OBJDIR)\main.o \
+          $(OBJDIR)\core\resource_monitor.o \
+          $(OBJDIR)\core\config_manager.o \
+          $(OBJDIR)\core\cpu_worker.o \
+          $(OBJDIR)\core\memory_worker.o \
+          $(OBJDIR)\platform\system_tray.o \
+          $(OBJDIR)\platform\autostart.o \
+          $(OBJDIR)\utils\console_utils.o \
+          $(OBJDIR)\utils\version.o \
+          $(OBJDIR)\utils\updater.o
 
-RESOURCE = $(RESDIR)/resource.rc
-OBJECTS = $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
-RESOBJECT = $(OBJDIR)/resource.o
+RESOBJECT = $(OBJDIR)\resource.o
 
-# 默认目标
-all: directories $(TARGET)
+.DEFAULT_GOAL := legacy-x86
 
-# 创建目录
+all: legacy-x86
+
+legacy-x86: single-build
+
+single-build: check-toolchain directories info-build $(TARGET)
+
+check-toolchain:
+ifndef CXX
+	@echo [ERROR] No suitable x86 MinGW compiler found.
+	@echo Install i686-w64-mingw32-g++ or a 32-bit MinGW g++ toolchain.
+	@exit 1
+endif
+ifndef RC
+	@echo [ERROR] No suitable resource compiler found.
+	@echo Install i686-w64-mingw32-windres or windres.
+	@exit 1
+endif
+ifndef OBJDUMP
+	@echo [ERROR] No suitable objdump tool found.
+	@echo Install llvm-objdump or objdump.
+	@exit 1
+endif
+
+info-build:
+	@echo ========================================
+	@echo MikaBooM Legacy x86 Build System
+	@echo ========================================
+	@echo Output: $(TARGET)
+	@echo Compiler: $(CXX)
+	@echo Resource Compiler: $(RC)
+	@echo Target OS: Windows 2000 / XP / 2003
+	@echo Expire Date: $(EXPIRE_DATE)
+	@echo ========================================
+
 directories:
 	@if not exist build mkdir build
 	@if not exist $(OBJDIR) mkdir $(OBJDIR)
@@ -85,21 +114,17 @@ directories:
 	@if not exist $(OBJDIR)\platform mkdir $(OBJDIR)\platform
 	@if not exist $(OBJDIR)\utils mkdir $(OBJDIR)\utils
 
-# 目标文件
 $(TARGET): $(OBJECTS) $(RESOBJECT)
 	@echo Linking $(TARGET)...
 	@$(CXX) $(OBJECTS) $(RESOBJECT) -o $@ $(LDFLAGS)
 	@llvm-strip $@ 2>nul || strip -s $@ 2>nul || echo [INFO] Strip skipped
 	@echo ========================================
 	@echo BUILD SUCCESS: $(TARGET)
-	@echo Target OS: Windows 2000 / XP / Vista / 7+
+	@echo Target OS: Windows 2000 / XP / 2003
 	@echo ========================================
 	@if exist $(TARGET) dir $(TARGET) | findstr $(TARGET)
 	@echo ========================================
 
-# ========================================
-# 编译规则
-# ========================================
 $(OBJDIR)\main.o: $(SRCDIR)\main.cpp
 	@echo [CXX] main.cpp
 	@$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -140,102 +165,64 @@ $(OBJDIR)\utils\updater.o: $(SRCDIR)\utils\updater.cpp
 	@echo [CXX] updater.cpp
 	@$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# ========================================
-# 资源文件编译规则
-# ========================================
-
-# 使用 windres (x86/x64)
-ifeq ($(USE_WINDRES),1)
 $(OBJDIR)\resource.o: $(RESDIR)\resource.rc
-	@echo [RC] resource.rc [windres]
-	@echo [RC] Target: $(RC_TARGET)
-	@$(RC) $(RCFLAGS) -D_WIN32_WINNT=0x0500 -i $< -o $@
-endif
+	@echo [RC] resource.rc
+	@$(RC) -D_WIN32_WINNT=0x0500 $< -o $@
 
-# 使用 llvm-rc + llvm-cvtres (ARM/ARM64)
-ifeq ($(USE_LLVM_RC),1)
-$(OBJDIR)\resource.res: $(RESDIR)\resource.rc
-	@echo [RC] resource.rc [llvm-rc]
-	@echo [RC] Machine: $(RC_MACHINE)
-	@llvm-rc /FO$(OBJDIR)\resource.res $(RESDIR)\resource.rc
-	
-$(OBJDIR)\resource.o: $(OBJDIR)\resource.res
-	@echo [CVTRES] resource.res -> resource.o
-	@llvm-cvtres /MACHINE:$(RC_MACHINE) /OUT:$@ $<
-endif
-
-# ========================================
-# 实用工具
-# ========================================
 clean:
 	@echo Cleaning...
 	@if exist build rmdir /s /q build
-	@if exist MikaBooM_x86.exe del /f /q MikaBooM_x86.exe
-	@if exist MikaBooM_x64.exe del /f /q MikaBooM_x64.exe
-	@if exist MikaBooM_arm.exe del /f /q MikaBooM_arm.exe
-	@if exist MikaBooM_arm64.exe del /f /q MikaBooM_arm64.exe
+	@if exist $(TARGET) del /f /q $(TARGET)
 	@echo Clean complete.
 
-rebuild: clean auto-build
+rebuild: clean legacy-x86
 
 check:
 	@echo ========================================
-	@echo Compiler Detection
+	@echo Legacy x86 Toolchain Detection
 	@echo ========================================
+	@echo i686-w64-mingw32-g++: $(CROSS_X86)
 	@echo Local GCC: $(LOCAL_GCC)
 	@echo Local RC: $(LOCAL_RC)
+	@echo llvm-objdump: $(LLVM_OBJDUMP)
+	@echo Local objdump: $(LOCAL_OBJDUMP)
 	@echo GCC Target: $(GCC_TARGET)
-	@echo ========================================
-	@echo Cross Compilers:
-	@echo   x86: $(CROSS_X86)
-	@echo   x64: $(CROSS_X64)
-	@echo   ARM: $(CROSS_ARM)
-	@echo   ARM64: $(CROSS_ARM64)
-	@echo ========================================
-	@echo LLVM Tools:
-	@echo   llvm-rc: $(LLVM_RC)
-	@echo   llvm-cvtres: $(LLVM_CVTRES)
-	@echo ========================================
-	@echo Architecture Support:
-ifdef LOCAL_SUPPORTS_X86
-	@echo   [OK] x86 (32-bit) WITH ICON
-else
-	@echo   [SKIP] x86 (32-bit)
-endif
-ifdef LOCAL_SUPPORTS_X64
-	@echo   [OK] x64 (64-bit) WITH ICON
-else
-	@echo   [SKIP] x64 (64-bit)
-endif
-ifdef CROSS_ARM
-ifdef LLVM_RC
-	@echo   [OK] ARM (32-bit) WITH ICON
-else
-	@echo   [OK] ARM (32-bit) NO ICON
-endif
-else
-	@echo   [SKIP] ARM (32-bit) - Need armv7-w64-mingw32-g++ or arm-w64-mingw32-g++
-endif
-ifdef CROSS_ARM64
-ifdef LLVM_RC
-	@echo   [OK] ARM64 (64-bit) WITH ICON
-else
-	@echo   [OK] ARM64 (64-bit) NO ICON
-endif
-else
-	@echo   [SKIP] ARM64 (64-bit) - Need aarch64-w64-mingw32-g++
-endif
+	@echo Selected Compiler: $(CXX)
+	@echo Selected Resource Compiler: $(RC)
+	@echo Selected objdump: $(OBJDUMP)
 	@echo ========================================
 
 check-deps:
 	@echo ========================================
 	@echo Checking DLL Dependencies
 	@echo ========================================
-	@if exist MikaBooM_x86.exe (echo MikaBooM_x86.exe: & llvm-objdump -p MikaBooM_x86.exe 2>nul | findstr "DLL Name" || objdump -p MikaBooM_x86.exe | findstr "DLL Name" & echo ========================================)
-	@if exist MikaBooM_x64.exe (echo MikaBooM_x64.exe: & llvm-objdump -p MikaBooM_x64.exe 2>nul | findstr "DLL Name" || objdump -p MikaBooM_x64.exe | findstr "DLL Name" & echo ========================================)
-	@if exist MikaBooM_arm.exe (echo MikaBooM_arm.exe: & llvm-objdump -p MikaBooM_arm.exe 2>nul | findstr "DLL Name" || objdump -p MikaBooM_arm.exe | findstr "DLL Name" & echo ========================================)
-	@if exist MikaBooM_arm64.exe (echo MikaBooM_arm64.exe: & llvm-objdump -p MikaBooM_arm64.exe 2>nul | findstr "DLL Name" || objdump -p MikaBooM_arm64.exe | findstr "DLL Name" & echo ========================================)
-	@echo All DLLs should be available on the target OS
+	@if exist $(TARGET) (echo $(TARGET): & $(OBJDUMP) -p $(TARGET) | findstr "DLL Name" & echo ========================================)
+	@echo Legacy x86 binary should stay compatible with Windows 2000 / XP / 2003.
 	@echo ========================================
 
-.PHONY: all clean rebuild run check test directories info
+check-imports:
+	@echo ========================================
+	@echo Checking forbidden imports for Win2000
+	@echo ========================================
+	@if not exist $(TARGET) (echo [ERROR] $(TARGET) not found & exit 1)
+	@$(OBJDUMP) -p $(TARGET) | findstr /C:"AcquireSRWLockExclusive" /C:"InitOnceExecuteOnce" /C:"FlsAlloc" /C:"GetThreadId" && (echo [ERROR] Forbidden imports found & exit 1) || echo [OK] No forbidden imports found
+	@echo ========================================
+
+run:
+	@if exist $(TARGET) ($(TARGET)) else echo No executable found
+
+help:
+	@echo ========================================
+	@echo MikaBooM Legacy x86 Build System - Help
+	@echo ========================================
+	@echo   make legacy-x86    - Build MikaBooM_x86_win2000.exe
+	@echo   make clean         - Remove build output
+	@echo   make rebuild       - Clean and rebuild legacy x86
+	@echo   make check         - Detect available x86 MinGW tools
+	@echo   make check-deps    - Show DLL dependencies
+	@echo   make check-imports - Check forbidden Win2000 imports
+	@echo   make run           - Run the built executable
+	@echo ========================================
+
+.PHONY: all legacy-x86 single-build check-toolchain info-build directories \
+        clean rebuild check check-deps check-imports run help

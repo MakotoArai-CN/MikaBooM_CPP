@@ -12,6 +12,25 @@ static WORD originalAttributes = 7;
 static bool isInitialized = false;
 bool ConsoleUtils::useUTF8 = false;
 
+namespace {
+std::string GetExecutableNameForDisplay() {
+    char path[MAX_PATH] = {0};
+    DWORD length = GetModuleFileNameA(NULL, path, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH) {
+        return "MikaBooM.exe";
+    }
+
+    const char* fileName = path;
+    for (const char* p = path; *p; ++p) {
+        if (*p == '\\' || *p == '/') {
+            fileName = p + 1;
+        }
+    }
+
+    return *fileName ? std::string(fileName) : std::string("MikaBooM.exe");
+}
+}
+
 void ConsoleUtils::Init() {
     if (isInitialized) return;
 
@@ -229,7 +248,8 @@ void ConsoleUtils::PrintHelpContent() {
         printf("USAGE:\n");
     }
     ResetColor();
-    printf("  MikaBooM.exe [options] <value>\n\n");
+    const std::string exeName = GetExecutableNameForDisplay();
+    printf("  %s [options] <value>\n\n", exeName.c_str());
 
     SetColor(FOREGROUND_GREEN | FOREGROUND_RED | FOREGROUND_INTENSITY);
     if (useUTF8) {
@@ -261,9 +281,9 @@ void ConsoleUtils::PrintHelpContent() {
         SetColor(FOREGROUND_GREEN | FOREGROUND_INTENSITY);
         printf(">> 示例:\n");
         ResetColor();
-        printf("  MikaBooM.exe -mem-min 256 -mem-max 512\n");
-        printf("  MikaBooM.exe -mem-freq-min 30 -mem-freq-max 60\n");
-        printf("  MikaBooM.exe -mem-refresh true -mem-refresh-interval 30\n\n");
+        printf("  %s -mem-min 256 -mem-max 512\n", exeName.c_str());
+        printf("  %s -mem-freq-min 30 -mem-freq-max 60\n", exeName.c_str());
+        printf("  %s -mem-refresh true -mem-refresh-interval 30\n\n", exeName.c_str());
     } else {
         printf("  -cpu <value>                Set CPU threshold (0-100)\n");
         printf("  -mem <value>                Set memory threshold (0-100)\n");

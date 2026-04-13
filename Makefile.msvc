@@ -1,6 +1,6 @@
 # MikaBooM MSVC NMake Makefile
 # 支持 x86/x64/ARM/ARM64 多架构编译
-# Windows 2000+ 兼容
+# modern 构建链路（x86 不再宣称 Win2000 兼容）
 
 # ========================================
 # 编译器和工具
@@ -35,8 +35,8 @@ ARCH = x64
 
 # ========================================
 # 根据架构设置编译参数
-# 统一构建：pdh.dll 运行时动态加载，无需静态链接
-# 单个 exe 兼容 Windows 2000 - Windows 11
+# modern 构建：pdh.dll 运行时动态加载，无需静态链接
+# 最低支持系统以实际工具链/运行库验证结果为准
 # ========================================
 !IF "$(ARCH)" == "x86"
 ARCH_SUFFIX = _x86
@@ -161,7 +161,7 @@ $(TARGET): directories $(OBJECTS)
 	$(LINK) $(LFLAGS) /OUT:$@ $(OBJECTS) $(LIBS)
 	@echo ========================================
 	@echo BUILD SUCCESS: $(TARGET)
-	@echo Target OS: Windows 2000 / XP / Vista / 7+
+	@echo Target profile: modern $(ARCH)
 	@echo Architecture: $(ARCH)
 	@echo ========================================
 	@if exist $(TARGET) dir $(TARGET) | findstr /C:"MikaBooM"
@@ -297,10 +297,11 @@ help:
 	@echo Targets:
 	@echo   all          - Build current architecture (default)
 	@echo   all-arch     - Build all architectures (x86/x64/ARM/ARM64)
-	@echo   x86          - Build x86 (32-bit, Windows 2000+)
-	@echo   x64          - Build x64 (64-bit, Windows XP x64/2003+)
+	@echo   x86          - Build modern x86 (32-bit)
+	@echo   x64          - Build modern x64 (64-bit)
 	@echo   arm          - Build ARM (32-bit, Windows RT/10 ARM)
 	@echo   arm64        - Build ARM64 (64-bit, Windows 10/11 ARM64)
+	@echo   Use GNU Makefile for legacy x86 (Windows 2000/XP/2003)
 	@echo   clean        - Clean build files
 	@echo   rebuild      - Clean and rebuild current architecture
 	@echo   rebuild-all  - Clean and rebuild all architectures
