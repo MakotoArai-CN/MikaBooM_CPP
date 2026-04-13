@@ -124,38 +124,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install MSYS2 mingw32 toolchain (msvcrt)
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW32
-          update: false
-          install: >-
-            make
-            mingw-w64-i686-gcc
-            mingw-w64-i686-binutils
+      - name: Install Chocolatey MinGW-w64 i686 toolchain
+        shell: powershell
+        run: |
+          choco install mingw --version=11.2.0.07112021 --force --allow-downgrade -y
+          refreshenv
 
       - name: Verify mingw32 toolchain
         shell: bash
         run: |
+          export PATH="/c/ProgramData/chocolatey/lib/mingw/tools/install/mingw32/bin:$PATH"
           echo "Workspace: $(pwd)"
-          echo "MSYSTEM: $MSYSTEM"
-          command -v g++
-          command -v windres
-          command -v make
-          GCC_TARGET=$(g++ -dumpmachine)
+          command -v i686-w64-mingw32-g++
+          command -v i686-w64-mingw32-windres
+          command -v make || echo "make not found, will use mingw32-make"
+          GCC_TARGET=$(i686-w64-mingw32-g++ -dumpmachine)
           echo "GCC target: $GCC_TARGET"
           test "$GCC_TARGET" = "i686-w64-mingw32"
 
       - name: Build legacy x86 executable
         shell: bash
         run: |
-          make legacy-x86
+          export PATH="/c/ProgramData/chocolatey/lib/mingw/tools/install/mingw32/bin:$PATH"
+          export CXX=i686-w64-mingw32-g++
+          export WINDRES=i686-w64-mingw32-windres
+          mingw32-make legacy-x86
           test -f MikaBooM_x86_win2000.exe
           ls -lah MikaBooM_x86_win2000.exe
 
       - name: Audit legacy x86 imports
         shell: bash
-        run: make check-imports
+        run: |
+          export PATH="/c/ProgramData/chocolatey/lib/mingw/tools/install/mingw32/bin:$PATH"
+          mingw32-make check-imports
 
       - name: Upload legacy x86 artifact
         uses: actions/upload-artifact@v4
