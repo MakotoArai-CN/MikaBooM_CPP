@@ -2,6 +2,7 @@
 #include "../platform/autostart.h"
 #include "../utils/system_info.h"
 #include "../utils/console_utils.h"
+#include "../utils/compat_string.h"
 #include <cstring>
 
 extern volatile LONG g_running;

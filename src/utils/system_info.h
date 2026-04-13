@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
+#include "compat_string.h"
 
 typedef LONG (WINAPI* RtlGetVersionPtr)(PRTL_OSVERSIONINFOEXW);
 typedef BOOL (WINAPI* GetVersionExAPtr)(LPOSVERSIONINFOA);

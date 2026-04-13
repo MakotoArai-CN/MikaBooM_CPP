@@ -49,6 +49,7 @@ CXXFLAGS = -std=c++11 -Wall -O2 $(ARCH_FLAGS) \
            -static-libgcc -static-libstdc++ \
            -D_WIN32_WINNT=0x0500 \
            -DWINVER=0x0500 \
+           -DFORCE_COMPAT_SAFE_STRING \
            -DEXPIRE_DATE=\"$(EXPIRE_DATE)\" \
            -ffunction-sections -fdata-sections
 

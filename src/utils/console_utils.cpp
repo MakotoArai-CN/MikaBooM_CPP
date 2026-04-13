@@ -1,6 +1,7 @@
 #include "console_utils.h"
 #include "version.h"
 #include "system_info.h"
+#include "compat_string.h"
 #include "../platform/system_compat.h"
 #include <cstdio>
 #include <cstdarg>

@@ -2,6 +2,7 @@
 #include "version.h"
 #include "console_utils.h"
 #include "system_info.h"
+#include "compat_string.h"
 #include <windows.h>
 #include <wininet.h>
 #include <cstdio>

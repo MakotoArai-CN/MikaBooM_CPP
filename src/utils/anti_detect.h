@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <string>
+#include <cstdint>
 
 // 字符串加密工具（XOR + 滚动密钥）
 class StringCrypt {
