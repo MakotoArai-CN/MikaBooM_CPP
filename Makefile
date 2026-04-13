@@ -5,6 +5,7 @@
 # Toolchain priority:
 #   1. i686-w64-mingw32-g++ (explicit cross-compiler)
 #   2. g++ whose -dumpmachine starts with i686 (native 32-bit MinGW)
+#   3. clang++ with -target i686-pc-windows-gnu (LLVM fallback)
 # An x86_64 g++ will NOT be used even if it is the only one on PATH.
 
 SHELL = cmd
@@ -12,6 +13,8 @@ SHELL = cmd
 CROSS_X86 := $(shell where i686-w64-mingw32-g++ 2>nul)
 LOCAL_GCC := $(shell where g++ 2>nul)
 LOCAL_RC := $(shell where windres 2>nul)
+LOCAL_CLANG := $(shell where clang++ 2>nul)
+LOCAL_LLVM_WINDRES := $(shell where llvm-windres 2>nul)
 LLVM_OBJDUMP := $(shell where llvm-objdump 2>nul)
 LOCAL_OBJDUMP := $(shell where objdump 2>nul)
 
@@ -40,14 +43,39 @@ ifeq ($(EXPIRE_DATE),)
     EXPIRE_DATE := 2027-12-31T23:59:59
 endif
 
+# --- Toolchain selection ---
+# Priority: cross MinGW > native i686 MinGW > LLVM/Clang
+USE_LLVM = 0
 ifdef CROSS_X86
     CXX = i686-w64-mingw32-g++
     RC = i686-w64-mingw32-windres
 else ifdef LOCAL_SUPPORTS_X86
     CXX = g++
     RC = windres
+else ifdef LOCAL_CLANG
+  ifdef LOCAL_LLVM_WINDRES
+    CXX = clang++
+    RC = llvm-windres
+    USE_LLVM = 1
+  endif
 endif
 
+ifeq ($(USE_LLVM),1)
+ARCH_FLAGS = -target i686-pc-windows-gnu -m32
+CXXFLAGS = -std=c++11 -Wall -O2 $(ARCH_FLAGS) \
+           -static \
+           -D_WIN32_WINNT=0x0500 \
+           -DWINVER=0x0500 \
+           -DFORCE_COMPAT_SAFE_STRING \
+           -DEXPIRE_DATE=\"$(EXPIRE_DATE)\" \
+           -ffunction-sections -fdata-sections
+
+LDFLAGS = -static $(ARCH_FLAGS) \
+          -Wl,--gc-sections \
+          -lkernel32 -luser32 -lshell32 -ladvapi32 \
+          -lpsapi -lcomctl32 -lwininet \
+          -mconsole
+else
 # i686 native compilers don't need -m32, but it doesn't hurt and is
 # required when a cross-compiler is used on a 64-bit host.
 ARCH_FLAGS = -m32
@@ -65,6 +93,7 @@ LDFLAGS = -static -static-libgcc -static-libstdc++ $(ARCH_FLAGS) \
           -lkernel32 -luser32 -lshell32 -ladvapi32 \
           -lpsapi -lcomctl32 -lwininet \
           -mconsole
+endif
 
 OBJECTS = $(OBJDIR)\main.o \
           $(OBJDIR)\core\resource_monitor.o \
@@ -89,13 +118,13 @@ single-build: check-toolchain directories info-build $(TARGET)
 
 check-toolchain:
 ifndef CXX
-	@echo [ERROR] No suitable x86 MinGW compiler found.
-	@echo Install i686-w64-mingw32-g++ or a 32-bit MinGW g++ toolchain.
+	@echo [ERROR] No suitable x86 compiler found.
+	@echo Install one of: i686-w64-mingw32-g++, 32-bit MinGW g++, or clang++ with llvm-windres.
 	@exit 1
 endif
 ifndef RC
 	@echo [ERROR] No suitable resource compiler found.
-	@echo Install i686-w64-mingw32-windres or windres.
+	@echo Install i686-w64-mingw32-windres, windres, or llvm-windres.
 	@exit 1
 endif
 ifndef OBJDUMP
@@ -192,12 +221,15 @@ check:
 	@echo i686-w64-mingw32-g++: $(CROSS_X86)
 	@echo Local GCC: $(LOCAL_GCC)
 	@echo Local RC: $(LOCAL_RC)
+	@echo Local Clang: $(LOCAL_CLANG)
+	@echo Local llvm-windres: $(LOCAL_LLVM_WINDRES)
 	@echo llvm-objdump: $(LLVM_OBJDUMP)
 	@echo Local objdump: $(LOCAL_OBJDUMP)
 	@echo GCC Target: $(GCC_TARGET)
 	@echo Selected Compiler: $(CXX)
 	@echo Selected Resource Compiler: $(RC)
 	@echo Selected objdump: $(OBJDUMP)
+	@echo Use LLVM: $(USE_LLVM)
 	@echo ========================================
 
 check-deps:

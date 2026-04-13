@@ -124,36 +124,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install LLVM/Clang
+      - name: Install LLVM MinGW toolchain
+        shell: pwsh
         run: |
-          choco install llvm --version=18.1.8 -y
+          $url = "https://github.com/mstorsjo/llvm-mingw/releases/download/20250417/llvm-mingw-20250417-msvcrt-x86_64.zip"
+          $zip = "$env:TEMP\llvm-mingw.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath C:\llvm-mingw -Force
+          $dir = (Get-ChildItem C:\llvm-mingw -Directory | Select-Object -First 1).FullName
+          echo "$dir\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
           choco install make -y
 
-      - name: Verify LLVM toolchain
+      - name: Verify toolchain
         shell: cmd
         run: |
-          set PATH=C:\Program Files\LLVM\bin;%PATH%
-          clang++ --version
-          llvm-rc --version
-          where make
+          where i686-w64-mingw32-g++
+          where i686-w64-mingw32-windres
+          where llvm-objdump
+          i686-w64-mingw32-g++ --version
+          make --version
 
-      - name: Build legacy x86 executable with Clang
+      - name: Build legacy x86 executable
         shell: cmd
         run: |
-          set PATH=C:\Program Files\LLVM\bin;%PATH%
-          set CXX=clang++
-          set CXXFLAGS=-m32 -target i686-pc-windows-msvc -D_WIN32_WINNT=0x0500
-          set LDFLAGS=-m32 -target i686-pc-windows-msvc
-          set WINDRES=llvm-rc
           make legacy-x86
           if not exist MikaBooM_x86_win2000.exe exit /b 1
           dir MikaBooM_x86_win2000.exe
 
       - name: Audit legacy x86 imports
         shell: cmd
-        run: |
-          set PATH=C:\Program Files\LLVM\bin;%PATH%
-          make check-imports
+        run: make check-imports
 
       - name: Upload legacy x86 artifact
         uses: actions/upload-artifact@v4
