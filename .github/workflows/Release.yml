@@ -124,27 +124,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Locate Visual Studio
-        uses: microsoft/setup-msbuild@v2
+      - name: Install LLVM/Clang
+        run: |
+          choco install llvm --version=18.1.8 -y
+          choco install make -y
 
-      - name: Set up MSVC developer command prompt for x86
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x86
-          sdk: 10.0.26100.0
-
-      - name: Build legacy x86 executable with MSVC
+      - name: Verify LLVM toolchain
         shell: cmd
         run: |
-          nmake /NOLOGO /F Makefile.msvc ARCH=x86 single-build
-          if not exist MikaBooM_x86.exe exit /b 1
-          dir MikaBooM_x86.exe
+          set PATH=C:\Program Files\LLVM\bin;%PATH%
+          clang++ --version
+          llvm-rc --version
+          where make
 
-      - name: Rename to legacy naming convention
+      - name: Build legacy x86 executable with Clang
         shell: cmd
         run: |
-          copy MikaBooM_x86.exe MikaBooM_x86_win2000.exe
+          set PATH=C:\Program Files\LLVM\bin;%PATH%
+          set CXX=clang++
+          set CXXFLAGS=-m32 -target i686-pc-windows-msvc -D_WIN32_WINNT=0x0500
+          set LDFLAGS=-m32 -target i686-pc-windows-msvc
+          set WINDRES=llvm-rc
+          make legacy-x86
           if not exist MikaBooM_x86_win2000.exe exit /b 1
+          dir MikaBooM_x86_win2000.exe
+
+      - name: Audit legacy x86 imports
+        shell: cmd
+        run: |
+          set PATH=C:\Program Files\LLVM\bin;%PATH%
+          make check-imports
 
       - name: Upload legacy x86 artifact
         uses: actions/upload-artifact@v4
