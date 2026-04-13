@@ -12,6 +12,7 @@ SHELL = cmd
 CROSS_X86 := $(shell where i686-w64-mingw32-g++ 2>nul)
 LOCAL_GCC := $(shell where g++ 2>nul)
 LOCAL_RC := $(shell where windres 2>nul)
+CROSS_RC := $(shell where i686-w64-mingw32-windres 2>nul)
 LLVM_OBJDUMP := $(shell where llvm-objdump 2>nul)
 LOCAL_OBJDUMP := $(shell where objdump 2>nul)
 
@@ -42,7 +43,11 @@ endif
 
 ifdef CROSS_X86
     CXX = i686-w64-mingw32-g++
+  ifdef CROSS_RC
     RC = i686-w64-mingw32-windres
+  else ifdef LOCAL_RC
+    RC = windres
+  endif
 else ifdef LOCAL_SUPPORTS_X86
     CXX = g++
     RC = windres
@@ -190,6 +195,7 @@ check:
 	@echo Legacy x86 Toolchain Detection
 	@echo ========================================
 	@echo i686-w64-mingw32-g++: $(CROSS_X86)
+	@echo i686-w64-mingw32-windres: $(CROSS_RC)
 	@echo Local GCC: $(LOCAL_GCC)
 	@echo Local RC: $(LOCAL_RC)
 	@echo llvm-objdump: $(LLVM_OBJDUMP)
