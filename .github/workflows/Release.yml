@@ -135,10 +135,8 @@ jobs:
             mingw-w64-i686-binutils
 
       - name: Verify mingw32 toolchain
-        shell: msys2 {0}
+        shell: bash
         run: |
-          workspace=$(cygpath -u "$GITHUB_WORKSPACE")
-          cd "$workspace"
           echo "Workspace: $(pwd)"
           echo "MSYSTEM: $MSYSTEM"
           command -v g++
@@ -149,20 +147,15 @@ jobs:
           test "$GCC_TARGET" = "i686-w64-mingw32"
 
       - name: Build legacy x86 executable
-        shell: msys2 {0}
+        shell: bash
         run: |
-          workspace=$(cygpath -u "$GITHUB_WORKSPACE")
-          cd "$workspace"
           make legacy-x86
           test -f MikaBooM_x86_win2000.exe
           ls -lah MikaBooM_x86_win2000.exe
 
       - name: Audit legacy x86 imports
-        shell: msys2 {0}
-        run: |
-          workspace=$(cygpath -u "$GITHUB_WORKSPACE")
-          cd "$workspace"
-          make check-imports
+        shell: bash
+        run: make check-imports
 
       - name: Upload legacy x86 artifact
         uses: actions/upload-artifact@v4
