@@ -95,6 +95,26 @@ inline int fopen_s(FILE** pFile, const char* filename, const char* mode) {
 #endif
 
 // ------------------------------------------------------------------
+// freopen_s
+// ------------------------------------------------------------------
+#ifndef freopen_s
+inline int freopen_s(FILE** pFile, const char* filename, const char* mode, FILE* stream) {
+    if (!pFile) return EINVAL;
+    *pFile = freopen(filename, mode, stream);
+    return (*pFile) ? 0 : errno;
+}
+#endif
+
+// ------------------------------------------------------------------
+// sscanf_s  (simplified: delegates to sscanf — note: sscanf_s has
+// extra size params for %s/%c but our codebase only uses %d/%c with
+// single-char destinations, so plain sscanf is safe here.)
+// ------------------------------------------------------------------
+#ifndef sscanf_s
+#define sscanf_s sscanf
+#endif
+
+// ------------------------------------------------------------------
 // localtime_s  (MSVC signature: errno_t localtime_s(tm*, const time_t*))
 // ------------------------------------------------------------------
 #ifndef localtime_s

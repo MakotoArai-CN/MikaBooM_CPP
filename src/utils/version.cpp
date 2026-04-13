@@ -1,4 +1,5 @@
 #include "version.h"
+#include "compat_string.h"
 #include <ctime>
 #include <cstring>
 #include <cstdio>
