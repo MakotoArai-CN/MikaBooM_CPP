@@ -1,6 +1,11 @@
 # MikaBooM Legacy x86 GNU Makefile
 # 用于构建 Windows 2000 / XP / 2003 专用的 legacy x86 发行物
 # 现代多架构构建请使用 Makefile.msvc
+#
+# Toolchain priority:
+#   1. i686-w64-mingw32-g++ (explicit cross-compiler)
+#   2. g++ whose -dumpmachine starts with i686 (native 32-bit MinGW)
+# An x86_64 g++ will NOT be used even if it is the only one on PATH.
 
 SHELL = cmd
 
@@ -16,11 +21,11 @@ else ifdef LOCAL_OBJDUMP
     OBJDUMP = objdump
 endif
 
+# Only accept a local g++ that truly targets i686 (32-bit).
+# We must NOT match x86_64-w64-mingw32 which also contains "mingw32".
 ifdef LOCAL_GCC
     GCC_TARGET := $(shell g++ -dumpmachine 2>nul)
     ifeq ($(findstring i686,$(GCC_TARGET)),i686)
-        LOCAL_SUPPORTS_X86 = 1
-    else ifeq ($(findstring mingw32,$(GCC_TARGET)),mingw32)
         LOCAL_SUPPORTS_X86 = 1
     endif
 endif
@@ -38,12 +43,14 @@ endif
 ifdef CROSS_X86
     CXX = i686-w64-mingw32-g++
     RC = i686-w64-mingw32-windres
-    ARCH_FLAGS = -m32
 else ifdef LOCAL_SUPPORTS_X86
     CXX = g++
     RC = windres
-    ARCH_FLAGS = -m32
 endif
+
+# i686 native compilers don't need -m32, but it doesn't hurt and is
+# required when a cross-compiler is used on a 64-bit host.
+ARCH_FLAGS = -m32
 
 CXXFLAGS = -std=c++11 -Wall -O2 $(ARCH_FLAGS) \
            -static-libgcc -static-libstdc++ \
