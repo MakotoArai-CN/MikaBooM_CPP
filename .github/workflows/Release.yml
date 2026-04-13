@@ -121,6 +121,9 @@ jobs:
   build-legacy-x86:
     needs: [get-version, verify-version]
     runs-on: windows-latest
+    env:
+      LEGACY_MINGW_BIN: C:\msys64\mingw32\bin
+      LEGACY_MSYS_BIN: C:\msys64\usr\bin
     steps:
       - uses: actions/checkout@v4
 
@@ -133,27 +136,30 @@ jobs:
             mingw-w64-i686-gcc
             mingw-w64-i686-binutils
 
-      - name: Add MINGW32 to PATH
-        shell: pwsh
-        run: |
-          "C:\msys64\mingw32\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-
       - name: Verify mingw32 toolchain
         shell: cmd
         run: |
+          set "PATH=%LEGACY_MINGW_BIN%;%LEGACY_MSYS_BIN%;%PATH%"
           where g++
           where windres
+          where make
           for /f %%i in ('g++ -dumpmachine') do set GCC_TARGET=%%i
+          echo Selected g++: %LEGACY_MINGW_BIN%\g++.exe
+          echo Selected windres: %LEGACY_MINGW_BIN%\windres.exe
           echo GCC target: %GCC_TARGET%
           if /I not "%GCC_TARGET%"=="i686-w64-mingw32" exit /b 1
 
       - name: Build legacy x86 executable
         shell: cmd
-        run: make legacy-x86
+        run: |
+          set "PATH=%LEGACY_MINGW_BIN%;%LEGACY_MSYS_BIN%;%PATH%"
+          make legacy-x86
 
       - name: Audit legacy x86 imports
         shell: cmd
-        run: make check-imports
+        run: |
+          set "PATH=%LEGACY_MINGW_BIN%;%LEGACY_MSYS_BIN%;%PATH%"
+          make check-imports
 
       - name: Upload legacy x86 artifact
         uses: actions/upload-artifact@v4
