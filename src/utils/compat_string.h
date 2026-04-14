@@ -28,33 +28,38 @@
 
 #ifdef COMPAT_NEED_SAFE_STRING_FALLBACK
 
-// ------------------------------------------------------------------
-// Macro redirects — these MUST be defined before CRT headers are
-// pulled in so that the compiler never sees the msvcrt.dll import
-// declarations for these symbols.
-// ------------------------------------------------------------------
+#endif // COMPAT_NEED_SAFE_STRING_FALLBACK — detection section
 
-// sprintf_s -> snprintf
-#ifndef sprintf_s
-#define sprintf_s snprintf
-#endif
-
-// sscanf_s -> sscanf  (our codebase only uses %d / %c, no %s)
-#ifndef sscanf_s
-#define sscanf_s sscanf
-#endif
-
-#endif // COMPAT_NEED_SAFE_STRING_FALLBACK — macro section
-
-// Now pull in CRT headers (safe: macros above will intercept declarations)
+// Now pull in CRT headers
 #include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <cstdarg>
+#include <cerrno>
 
 #ifdef COMPAT_NEED_SAFE_STRING_FALLBACK
 
-#include <cerrno>
+// ------------------------------------------------------------------
+// Wrapper functions that will be called via macros
+// ------------------------------------------------------------------
+
+// sprintf_s wrapper: redirect to snprintf
+inline int compat_sprintf_s(char* buffer, size_t sizeOfBuffer, const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    int result = vsnprintf(buffer, sizeOfBuffer, format, args);
+    va_end(args);
+    return result;
+}
+
+// sscanf_s wrapper: redirect to sscanf (our code only uses %d/%c, no %s)
+inline int compat_sscanf_s(const char* buffer, const char* format, ...) {
+    va_list args;
+    va_start(args, format);
+    int result = vsscanf(buffer, format, args);
+    va_end(args);
+    return result;
+}
 
 // ------------------------------------------------------------------
 // strcpy_s
@@ -66,7 +71,6 @@ inline int compat_strcpy_s(char* dest, size_t destsz, const char* src) {
     memcpy(dest, src, len + 1);
     return 0;
 }
-#define strcpy_s compat_strcpy_s
 
 // ------------------------------------------------------------------
 // strcat_s
@@ -79,7 +83,6 @@ inline int compat_strcat_s(char* dest, size_t destsz, const char* src) {
     memcpy(dest + dlen, src, slen + 1);
     return 0;
 }
-#define strcat_s compat_strcat_s
 
 // ------------------------------------------------------------------
 // fopen_s
@@ -89,7 +92,6 @@ inline int compat_fopen_s(FILE** pFile, const char* filename, const char* mode) 
     *pFile = fopen(filename, mode);
     return (*pFile) ? 0 : errno;
 }
-#define fopen_s compat_fopen_s
 
 // ------------------------------------------------------------------
 // freopen_s
@@ -99,7 +101,6 @@ inline int compat_freopen_s(FILE** pFile, const char* filename, const char* mode
     *pFile = freopen(filename, mode, stream);
     return (*pFile) ? 0 : errno;
 }
-#define freopen_s compat_freopen_s
 
 // ------------------------------------------------------------------
 // localtime_s  (MSVC signature: errno_t localtime_s(tm*, const time_t*))
@@ -111,6 +112,16 @@ inline int compat_localtime_s(struct tm* _tm, const time_t* _time) {
     *_tm = *result;
     return 0;
 }
+
+// ------------------------------------------------------------------
+// Macro redirects — defined AFTER all wrapper functions
+// ------------------------------------------------------------------
+#define strcpy_s compat_strcpy_s
+#define strcat_s compat_strcat_s
+#define fopen_s compat_fopen_s
+#define freopen_s compat_freopen_s
 #define localtime_s compat_localtime_s
+#define sprintf_s compat_sprintf_s
+#define sscanf_s compat_sscanf_s
 
 #endif // COMPAT_NEED_SAFE_STRING_FALLBACK
